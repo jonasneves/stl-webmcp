@@ -1,0 +1,289 @@
+/* stl-studio layout: the canvas always fills every pixel below the header;
+ * the script editor and chat are floating overlays docked left/right, each
+ * independently toggleable, so opening/closing them never reflows the
+ * viewport. Pairs with app.css (tokens, header, settings, dialogs) and
+ * chat.css (chat surface + component styles) — both loaded unmodified from
+ * webmcp. This file overrides their GRID layout (header/tools/source/work/
+ * chat rows) with a single full-bleed content area, and repositions
+ * .tools-panel / .chat-panel as overlays to match.
+ *
+ * `body`'s `display: grid` is `!important` in chat.css, but the specific
+ * template properties below aren't — this file loads after chat.css, so
+ * equal-specificity `body{...}` rules here win the cascade without needing
+ * !important of our own. */
+
+body {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "header" "work";
+}
+main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
+
+/* ---------- Full-bleed viewport ---------- */
+
+.viewport-pane {
+  position: absolute;
+  inset: 0;
+  background: #14161c;
+  overflow: hidden;
+}
+
+#gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* Centered, not left-anchored: the editor and chat overlays each claim a
+ * ~420px band at the left/right edges (below), so a left-aligned toolbar
+ * would sit directly under the editor panel and be hidden whenever it's
+ * open. Centering keeps it in the gap between the two, visible regardless
+ * of which panels are open. */
+.viewport-toolbar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  background: #14161cee;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.viewport-toolbar button {
+  background: rgba(30, 33, 43, 0.85);
+  color: #eceef3;
+  border: 1px solid #3a3f52;
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.viewport-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.viewport-toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.viewport-toolbar button.on { border-color: var(--accent); color: var(--accent); }
+.viewport-toolbar button:disabled { opacity: .4; cursor: default; }
+.viewport-toolbar button:disabled:hover { border-color: #3a3f52; color: #eceef3; }
+.viewport-toolbar .vp-sep { width: 1px; height: 20px; background: #3a3f52; margin: 0 2px; }
+
+.vp-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-xl);
+  text-align: center;
+  color: #7c8296;
+  font-size: var(--text-sm);
+  pointer-events: none;
+}
+
+.vp-report {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 5;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: #eceef3;
+  background: #131722cc;
+  border: 1px solid #3a3f52;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  text-align: right;
+  line-height: 1.6;
+  pointer-events: none;
+}
+.vp-report .vp-report-bad { color: var(--risk-high, #ef4444); }
+.vp-report .vp-report-dim { color: #9aa3bb; }
+
+/* ---------- Floating side panels (editor left, chat right) ----------
+ * Fixed to the viewport, not the grid — they overlay the canvas rather
+ * than sharing space with it. Sliding them off-screen via transform (not
+ * display:none) keeps the slide-out transition and means the canvas's own
+ * size is never affected by panel state. */
+
+.editor-pane,
+.chat-panel {
+  position: fixed;
+  top: 52px; /* header height */
+  bottom: 0;
+  z-index: 20;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-lg);
+  transition: transform 220ms var(--ease);
+  /* Reset webmcp's chat-panel-as-grid-card styling — it's a full-height
+   * overlay here, not a margined card next to the work column. Also
+   * neutralizes chat.css's own max-width:768px rule capping .chat-panel
+   * to 60dvh — that was sized for it sharing a grid row with the work
+   * column, which no longer happens at any width here. */
+  margin: 0;
+  border-radius: 0;
+  max-height: none;
+}
+
+.editor-pane {
+  left: 0;
+  border-right: 1px solid var(--border);
+  border-left: none;
+}
+.editor-pane[data-open="false"] { transform: translateX(-100%); }
+
+.chat-panel {
+  right: 0;
+  border-left: 1px solid var(--border);
+}
+.chat-panel[data-open="false"] { transform: translateX(100%); }
+
+@media (max-width: 900px) {
+  .editor-pane, .chat-panel { width: 100vw; }
+}
+
+/* ---------- Edge toggle buttons ----------
+ * Icon-button pair pinned to the canvas's top corners, always visible over
+ * it — clicking one slides its panel in/out. The icon itself is fixed per
+ * button (which side it controls); .on marks the panel's current open
+ * state via color rather than swapping glyphs. z-index above the panels
+ * so the button stays reachable even once its panel is open alongside it. */
+
+.edge-toggle {
+  position: fixed;
+  top: 64px;
+  z-index: 25;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 33, 43, 0.85);
+  color: #eceef3;
+  border: 1px solid #3a3f52;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0;
+}
+.edge-toggle:hover { background: rgba(45, 51, 68, 0.95); color: var(--accent); border-color: var(--accent); }
+.edge-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.edge-toggle.on { color: var(--accent); border-color: var(--accent); }
+
+.edge-toggle-left { left: 12px; }
+.edge-toggle-right { right: 12px; }
+
+/* ---------- Editor pane internals ---------- */
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  /* Clearance for .edge-toggle-left, which floats fixed at the same
+   * top-left corner (outside this panel) rather than inline with this
+   * toolbar's own content. */
+  padding-left: 46px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Same clearance on the chat side, for .edge-toggle-right. */
+.chat-header { padding-right: 46px; }
+.editor-title { font-weight: 600; font-size: var(--text-sm); color: var(--text-muted); flex: 1; }
+.editor-history {
+  font-size: var(--text-xs);
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  max-width: 34%;
+}
+.btn-run {
+  background: var(--accent);
+  color: #04201d;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.btn-run:hover { filter: brightness(1.08); }
+.btn-run kbd { font-family: var(--mono); font-size: 0.7em; opacity: .75; }
+
+.panel-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+}
+.panel-close:hover { color: var(--text); border-color: var(--border); background: var(--surface-alt); }
+
+.editor-text {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: var(--space-md);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  background: transparent;
+  color: var(--text);
+  tab-size: 2;
+}
+
+.editor-status {
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  border-top: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.editor-status:empty { display: none; }
+.editor-status.ok { color: var(--risk-low); background: var(--badge-green-bg); }
+.editor-status.bad { color: var(--risk-high); background: var(--badge-red-bg); }
+.editor-status.busy { color: var(--text-muted); }
+
+/* ---------- tools-panel + chat-panel: float, don't reserve grid rows ---------- */
+
+.tools-panel {
+  position: fixed;
+  top: 52px;
+  left: var(--space-lg);
+  z-index: 25;
+  width: min(420px, 90vw);
+  max-height: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.tools-panel[data-collapsed="false"] { max-height: min(60vh, 600px); overflow-y: auto; }
+
+.chat-panel { grid-area: unset; }

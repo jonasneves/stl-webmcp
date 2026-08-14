@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#e8ebf2">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='15'%3E%F0%9F%A7%8A%3C/text%3E%3C/svg%3E">
+  <title>stl-studio</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="cad.css">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js" as="script">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" as="script">
+  <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <div class="main-column">
+    <header>
+      <div class="header-left">
+        <h1><a class="home-link" href="../">stl-studio</a></h1>
+        <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
+      </div>
+      <div class="settings-wrap">
+        <button class="settings-btn" id="settings-btn" aria-label="Settings" aria-expanded="false" aria-controls="settings-popover" title="Settings">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M6.08 1.5a.5.5 0 0 0-.495.43l-.198 1.382a4.5 4.5 0 0 0-.968.565L3.1 3.29a.5.5 0 0 0-.617.172L1.5 4.9a.5.5 0 0 0 .1.657l1.1.9A4.5 4.5 0 0 0 2.6 7.5c0 .328.034.648.1.943l-1.1.9a.5.5 0 0 0-.1.657l.984 1.438a.5.5 0 0 0 .617.172l1.319-.588c.298.213.617.398.968.565l.198 1.383a.5.5 0 0 0 .495.43h1.84a.5.5 0 0 0 .495-.43l.198-1.383a4.5 4.5 0 0 0 .968-.565l1.319.588a.5.5 0 0 0 .617-.172L13.4 10a.5.5 0 0 0-.1-.657l-1.1-.9c.066-.295.1-.615.1-.943s-.034-.648-.1-.943l1.1-.9A.5.5 0 0 0 13.5 4.9l-.984-1.438a.5.5 0 0 0-.617-.172l-1.319.588a4.5 4.5 0 0 0-.968-.565L9.415 1.93A.5.5 0 0 0 8.92 1.5H6.08ZM7.5 9.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="settings-popover" id="settings-popover" hidden role="dialog" aria-label="Settings">
+          <div class="settings-section">
+            <div class="settings-section-label">Appearance</div>
+            <div class="theme-toggle" role="group" aria-label="Color theme">
+              <button class="theme-opt" data-theme="system">System</button>
+              <button class="theme-opt" data-theme="light">Light</button>
+              <button class="theme-opt" data-theme="dark">Dark</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-label">Local agent</div>
+            <select class="chat-model-select" id="model-select" aria-label="Model">
+              <option value="termd:default">Daemon default</option>
+              <option value="termd:sonnet">Claude Sonnet 5</option>
+              <option value="termd:opus">Claude Opus 5</option>
+              <option value="termd:haiku">Claude Haiku 4.5</option>
+            </select>
+            <p class="settings-note" id="termd-status" hidden>
+              Not detected. stl-studio runs the model on your own machine &mdash;
+              <a href="https://jonasneves.com/termd/" target="_blank" rel="noopener">install termd and the bridge extension</a>, then reload.
+            </p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="tools-panel" id="tools-panel" data-collapsed="true">
+      <div class="tools-panel-inner" id="tools-panel-inner"></div>
+    </div>
+
+    <main>
+      <section class="viewport-pane">
+        <div class="viewport-toolbar">
+          <button id="vp-wireframe">Wireframe: off</button>
+          <button id="vp-grid" class="on">Grid</button>
+          <button id="vp-reset" disabled>Reset view</button>
+          <span class="vp-sep"></span>
+          <button id="vp-open">Open reference&#8230;</button>
+          <input id="vp-file" type="file" accept=".stl" hidden>
+          <span class="vp-sep"></span>
+          <button id="vp-export" disabled>Export STL</button>
+        </div>
+        <canvas id="gl"></canvas>
+        <div id="vp-empty" class="vp-empty">No shape yet — describe one in chat, or write a script and hit Run.</div>
+        <div id="vp-report" class="vp-report" hidden></div>
+      </section>
+    </main>
+  </div>
+
+  <button id="panel-toggle-left" class="edge-toggle edge-toggle-left" type="button"
+    aria-expanded="true" aria-controls="editor-pane" title="Toggle script panel">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <defs><clipPath id="clip-toggle-left"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
+      <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="2.75" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-left)"/>
+    </svg>
+  </button>
+
+  <aside class="editor-pane" id="editor-pane" data-open="true">
+    <div class="editor-toolbar">
+      <span class="editor-title">Script</span>
+      <select id="editor-history" class="editor-history" aria-label="Script history">
+        <option value="">History&#8230;</option>
+      </select>
+      <button id="editor-run" class="btn-run">Run <kbd>&#8984;&#9166;</kbd></button>
+      <button id="editor-close" class="panel-close" aria-label="Close script panel" title="Close">&#10005;</button>
+    </div>
+    <textarea id="editor" class="editor-text" spellcheck="false" autocomplete="off" autocapitalize="off"
+      aria-label="CSG script"></textarea>
+    <div id="editor-status" class="editor-status" role="status"></div>
+  </aside>
+
+  <button id="panel-toggle-right" class="edge-toggle edge-toggle-right" type="button"
+    aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <defs><clipPath id="clip-toggle-right"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
+      <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="11.5" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-right)"/>
+    </svg>
+  </button>
+
+  <aside class="chat-panel" id="chat-panel-el" data-open="true">
+    <div class="chat-header">
+      <span class="chat-header-title">AI Chat</span>
+      <span class="chat-model-label" id="chat-model-label">Claude</span>
+      <button class="btn btn-sm" id="chat-reset" aria-label="Clear chat">Clear</button>
+      <button id="chat-close" class="panel-close" aria-label="Close chat panel" title="Close">&#10005;</button>
+    </div>
+    <div class="chat-messages" id="chat-messages" aria-live="polite" aria-label="Chat messages"></div>
+    <div class="chat-input-area">
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input" placeholder="Describe a part&#8230;" rows="1" aria-label="Chat message"></textarea>
+        <button class="chat-send-btn" id="chat-send" aria-label="Send message" title="Send">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="chat-abort-btn" id="chat-abort" hidden aria-label="Stop generating" title="Stop">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <rect width="11" height="11" rx="2" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <p class="dialog-title" id="confirm-title">Confirm action</p>
+      <p class="dialog-tool" id="confirm-tool"></p>
+      <p class="dialog-args" id="confirm-args"></p>
+      <div class="dialog-actions">
+        <button class="btn-cancel" value="cancel">Cancel</button>
+        <button class="btn-confirm" value="confirm">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="prompt-dialog" aria-labelledby="prompt-title">
+    <form method="dialog">
+      <p class="dialog-title" id="prompt-title"></p>
+      <input type="text" class="dialog-input" id="prompt-input" autocomplete="off">
+      <div class="dialog-actions">
+        <button class="btn-cancel" value="cancel">Skip</button>
+        <button class="btn-confirm" value="confirm">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    (function () {
+      const stored = localStorage.getItem('webmcp-theme') || 'system';
+      const resolved = stored === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : stored;
+      document.documentElement.dataset.theme = resolved;
+    })();
+  </script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
