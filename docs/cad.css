@@ -647,6 +647,15 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
    * the tray has moved below the clusters there's nothing to collide
    * with, so let it use the full centering/wrap behavior it always had. */
   .viewport-toolbar { top: 56px; max-width: none; }
+  /* The tray wraps to one button per row at this width, and a divider
+   * drawn as a 1px-wide, 20px-tall bar only reads as a separator between
+   * items sharing a row — once wrapped it floats beside a button as a
+   * stray mark. Grouping is already carried by the row breaks. */
+  .viewport-toolbar .vp-sep { display: none; }
+  /* 999px reads as a pill only while the tray is one button tall; wrapped
+   * to a stack it's as tall as it is wide, and a fully-round tray reads as
+   * a blob behind the buttons rather than a surface holding them. */
+  .viewport-toolbar { border-radius: var(--radius-lg); }
   /* #tools-panel is anchored (position:absolute, left:0) to its trigger
    * inside .hud-left, which is no longer near the viewport's left edge —
    * a rightward-expanding min(420px, 90vw) dropdown can run off the right
