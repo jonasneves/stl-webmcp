@@ -623,8 +623,10 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * styling chat.js/ui.js's rendered DOM and the app-owned confirm/prompt
  * dialogs. Every selector below was grepped out of docs/runtime/chat.js
  * (.msg-tool-card/-header/-status/-label/-name/-chevron/-body/-args,
- * .chat-divider, .chat-spinner) and docs/runtime/ui.js + index.html
- * (#confirm-dialog, #confirm-title, #confirm-tool, .dialog-*) — none
+ * .chat-divider, .chat-spinner), docs/runtime/ui.js + index.html
+ * (#confirm-dialog, #confirm-title, #confirm-tool, .dialog-*), and
+ * docs/runtime/tools.js's renderToolsPanel (`<span class="annotation-badge
+ * read-only">`, `.idempotent`, `.destructive`, `.closed-world`) — none
  * invented; no DOM or JS changed. */
 
 /* Stats as data (cont'd from .vp-report/.editor-status above): the
@@ -674,6 +676,25 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+
+/* Tool trust badges (tools-panel's .annotation-badge + kind modifiers,
+ * app.css lines ~232-244): app.css renders these as solid saturated pill
+ * fills (--badge-*-bg) with equally saturated text — loud all-caps chips
+ * that don't match the hairline-chip language the rest of this section
+ * uses (.chip, .msg-tool-label above). Flatten to that same pattern —
+ * transparent fill, a 1px hairline border, muted text — and demote each
+ * kind's hue to a thin border tint only, the way .vp-report-bad above
+ * already uses --risk-high directly as a small text color rather than a
+ * background fill. Size/caps/weight (app.css) are untouched. */
+.annotation-badge {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.annotation-badge.read-only { border-color: var(--risk-low); }
+.annotation-badge.idempotent { border-color: var(--accent); }
+.annotation-badge.destructive { border-color: var(--risk-high); }
+.annotation-badge.closed-world { border-color: var(--risk-med); }
 
 /* Approval card: #confirm-dialog / #prompt-dialog (index.html), opened by
  * runtime/ui.js's showConfirmDialog/showPromptDialog — app-owned markup,

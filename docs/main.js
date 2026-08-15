@@ -428,15 +428,28 @@ function applyManifoldMesh(meshData) {
   applyGeometry(geometry);
 }
 
-function pushHistory(code, ok) {
-  state.history.unshift({ code, ok, ts: Date.now() });
-  state.history = state.history.slice(0, 20);
+const HISTORY_KEY = 'stl-studio-history';
+
+// Shared by pushHistory and the on-load restore below, so the dropdown is
+// always built the same way regardless of where state.history came from.
+function renderHistorySelect() {
   historySelect.innerHTML = '<option value="">History…</option>' + state.history.map((h, i) => {
     const t = new Date(h.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const mark = h.ok ? '✓' : '✗';
     const snippet = h.code.trim().split('\n').find(l => l.trim() && !l.trim().startsWith('//')) || h.code.trim().slice(0, 40);
     return `<option value="${i}">${mark} ${t} — ${escapeHtml(snippet.slice(0, 40))}</option>`;
   }).join('');
+}
+function pushHistory(code, ok) {
+  state.history.unshift({ code, ok, ts: Date.now() });
+  state.history = state.history.slice(0, 20);
+  renderHistorySelect();
+  try {
+    const serialized = JSON.stringify(state.history);
+    // Defensive cap on top of the 20-entry bound above: guards against a
+    // corrupted/oversized quota situation rather than any realistic script.
+    if (serialized.length <= 200_000) localStorage.setItem(HISTORY_KEY, serialized);
+  } catch { /* private mode, ignore */ }
 }
 historySelect.addEventListener('change', () => {
   const i = Number(historySelect.value);
@@ -446,6 +459,19 @@ historySelect.addEventListener('change', () => {
   }
   historySelect.value = '';
 });
+// Restore past runs across reloads. Only ever touches state.history + the
+// dropdown — editorEl.value keeps whatever DEFAULT_SCRIPT set it to above,
+// so a reload never silently swaps in an old script underneath the user.
+(function restoreHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    state.history = parsed.filter(h => h && typeof h.code === 'string').slice(0, 20);
+    renderHistorySelect();
+  } catch { /* private mode or corrupted entry, ignore */ }
+})();
 
 async function runScript(code, { record = true } = {}) {
   state.busy = true;
