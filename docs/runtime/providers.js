@@ -130,6 +130,26 @@ export async function answerTermdTool(token, result) {
   return res.ok;
 }
 
+/* Answer a parked permission request — termd emits one of these when the
+ * embedded agent calls a tool that needs a human in the loop (AskUserQuestion
+ * being the one this runtime renders; anything else gets an automatic deny —
+ * see loop.js). Same dual bridge/fetch path as answerTermdTool, different
+ * endpoint: /fleet/blocked rather than /agent/tool. optionId is 'allow' or
+ * 'deny'; updatedInput carries the answers and is only sent on allow. */
+export async function answerTermdPermission(token, optionId, updatedInput) {
+  const path = `/fleet/blocked/${encodeURIComponent(token)}`;
+  const body = updatedInput !== undefined ? { optionId, updatedInput } : { optionId };
+  if (getTermdPort()) {
+    try { await bridgeSend({ path, body }); return true; }
+    catch { return false; }
+  }
+  const res = await fetch(`${TERMD_URL}${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.ok;
+}
+
 async function* readStreamLines(body) {
   const reader = body.getReader();
   const decoder = new TextDecoder();

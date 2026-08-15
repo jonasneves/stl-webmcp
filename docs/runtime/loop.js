@@ -4,10 +4,11 @@
 // calls back into the page, so this file no longer drives a conversation. It
 // answers one.
 
-import { streamTermdAgent, answerTermdTool, parseTermdStream } from './providers.js';
+import { streamTermdAgent, answerTermdTool, answerTermdPermission, parseTermdStream } from './providers.js';
 import {
   appendMessage, appendDivider, appendToolMsg,
   createPendingToolCard, resolveToolCard,
+  createQuestionCard,
   hideSpinner, showSpinner,
 } from './chat.js';
 import { showConfirmDialog, scrollDisplayIntoView, renderMarkdown } from './ui.js';
@@ -72,6 +73,21 @@ async function executeTool(name, input, pendingEl, getDividerContext) {
   return result;
 }
 
+// Render a question card and wait for the person to answer or skip it.
+// Mirrors executeTool's shape below — a helper the event switch awaits
+// synchronously, so the loop only reads the next SSE event once someone has
+// responded (or the card's own countdown resolves it as a skip — see
+// createQuestionCard).
+function askUserQuestion(questions, expiresAt) {
+  return new Promise((resolve) => {
+    createQuestionCard(questions, {
+      expiresAt,
+      onSubmit: (answers, response) => resolve({ answers, response, skipped: false }),
+      onSkip: () => resolve({ skipped: true }),
+    });
+  });
+}
+
 // termd loop ────────────────────────────────────────────────────────────
 //
 // The odd one out: termd runs the agent loop on the operator's machine, so
@@ -107,9 +123,15 @@ async function runConversationTermd(messages, { signal, getSystemPrompt, getDivi
   }
 
   let textEl = null, text = '';
+  // The stream's first event; captured so a permission_request can build its
+  // own resolveToken on older termd builds that don't send one yet (see
+  // below).
+  let turnId = null;
   try {
     for await (const evt of parseTermdStream(body)) {
-      if (evt.type === 'text') {
+      if (evt.type === 'turn') {
+        turnId = evt.turnId;
+      } else if (evt.type === 'text') {
         if (!textEl) { hideSpinner(); textEl = appendMessage('assistant', ''); }
         text += evt.text;
         textEl.innerHTML = renderMarkdown(text);
@@ -121,6 +143,32 @@ async function runConversationTermd(messages, { signal, getSystemPrompt, getDivi
         // Nothing to retry against, so surface it rather than looping.
         const landed = await answerTermdTool(evt.token, result?.error ? { error: result.error } : { content: result });
         if (!landed) appendMessage('error', `termd stopped waiting for ${evt.name}.`);
+        showSpinner();
+      } else if (evt.type === 'permission_request') {
+        // termd parks the turn — and denies-and-interrupts it once
+        // evt.expiresAt passes with no answer — whenever the embedded agent
+        // calls a tool that needs a human in the loop. AskUserQuestion is
+        // the only one this runtime renders a UI for; every other tool name
+        // gets an automatic deny rather than generic permission UI.
+        hideSpinner();
+        // evt.resolveToken/expiresAt are the new termd fields; reconstruct
+        // the token for older builds from the turn this request belongs to.
+        const token = evt.resolveToken || `${turnId}.${evt.requestId}`;
+        if (evt.name === 'AskUserQuestion') {
+          const { answers, response, skipped } = await askUserQuestion(evt.input?.questions || [], evt.expiresAt);
+          if (skipped) await answerTermdPermission(token, 'deny');
+          else await answerTermdPermission(token, 'allow', {
+            questions: evt.input.questions,
+            answers,
+            // Only present when at least one question was answered via
+            // "Other…" — matches the SDK's AskUserQuestionOutput contract,
+            // where `response` is the freeform text typed instead of a pick.
+            ...(response !== undefined ? { response } : {}),
+          });
+        } else {
+          appendMessage('error', `${evt.name} asked for permission — not supported in embedded chat; denied`);
+          await answerTermdPermission(token, 'deny');
+        }
         showSpinner();
       } else if (evt.type === 'result' && evt.isError) {
         appendMessage('error', evt.text || 'termd turn failed.');

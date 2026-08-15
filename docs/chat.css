@@ -294,6 +294,212 @@ main          { grid-area: work; min-width: 0; }
   border-radius: var(--radius);
 }
 
+/* ── Question cards (AskUserQuestion permission requests) ──────────
+ * termd parks the turn on a permission_request when the embedded agent
+ * calls AskUserQuestion. Same shell as the tool cards above — hairline
+ * border, --radius, --shadow-sm — but this one reads as an approval
+ * surface, not a code trace: body copy in --font, not --mono, and the
+ * only accent color anywhere in the card is the Submit button. */
+
+.msg-question-card {
+  align-self: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  color: var(--text);
+  animation: msg-fade-in 0.15s var(--ease);
+}
+
+.msg-question-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.msg-question + .msg-question {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.msg-question-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+.msg-question-chip {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 7px;
+  border-radius: 100px;
+}
+
+.msg-question-text {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.msg-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msg-question-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 10px;
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  text-align: left;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.msg-question-option:hover { border-color: var(--text-muted); }
+.msg-question-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.msg-question-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.msg-question-option-label { font-weight: 500; }
+
+.msg-question-option-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.msg-question-other {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: var(--text-sm);
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.msg-question-other::placeholder { color: var(--text-muted); }
+
+.msg-question-other:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.msg-question-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+
+.msg-question-countdown {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-question-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.msg-question-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--text-xs);
+  font-family: var(--font);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease), opacity var(--duration) var(--ease);
+}
+
+.msg-question-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg-question-btn:active { transform: scale(0.97); }
+
+.msg-question-skip {
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+}
+.msg-question-skip:hover { color: var(--text); border-color: var(--text-muted); }
+
+.msg-question-submit {
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+}
+.msg-question-submit:hover:not(:disabled) { opacity: 0.85; }
+.msg-question-submit:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Settled: the interactive card collapses to this — one quiet line per
+ * question, same register as a resolved tool card. */
+.msg-question-card.settled {
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  box-shadow: none;
+}
+
+.msg-question-summary-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  overflow: hidden;
+}
+
+.msg-question-summary-q {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-question-summary-arrow { flex-shrink: 0; opacity: 0.6; }
+
+.msg-question-summary-a {
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-question-card.expired .msg-question-summary-a { color: var(--risk-high); }
+
 /* ── Input area — pill shape, send button rides inside ──────────── */
 
 .chat-input-area {
