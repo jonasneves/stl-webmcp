@@ -193,6 +193,7 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   z-index: 5;
   font-family: var(--mono);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
   color: #eceef3;
   background: var(--glass-veil-dense);
   backdrop-filter: blur(14px) var(--glass-sat);
@@ -270,7 +271,9 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 .editor-pane,
 .chat-panel,
 .tools-panel,
-.settings-popover {
+.settings-popover,
+#confirm-dialog,
+#prompt-dialog {
   color-scheme: dark;
   --surface: #1a1d24;
   --surface-alt: #21252d;
@@ -515,6 +518,7 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   padding: var(--space-sm) var(--space-md);
   font-family: var(--mono);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
   border-top: 1px solid var(--border);
   white-space: pre-wrap;
   word-break: break-word;
@@ -522,7 +526,9 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 .editor-status:empty { display: none; }
 .editor-status.ok { color: var(--risk-low); background: var(--badge-green-bg); }
 .editor-status.bad { color: var(--risk-high); background: var(--badge-red-bg); }
-.editor-status.busy { color: var(--text-muted); }
+/* .busy's own color rule now lives in the shimmer section below (§ Loading
+ * shimmer) — it needs to be transparent, not muted, for the gradient text
+ * clip to show, so this is fully superseded rather than duplicated. */
 
 /* ---------- tools-panel: anchor to its own trigger, not the viewport ----------
  * Same wrapper pattern as .settings-wrap/.settings-popover (chat.css) — a
@@ -609,6 +615,178 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   -webkit-backdrop-filter: blur(20px) var(--glass-sat);
   border: var(--glass-hairline);
   box-shadow: var(--glass-rim);
+}
+
+/* ---------- Beautiful UI pass: chat chrome + dialogs ----------
+ * beautifui.dev's language (hairline borders, one accent, mono tabular
+ * stats, compact tool chips, quiet approval cards, restrained shimmer)
+ * applied to chat.js/ui.js's already-rendered DOM and to the app-owned
+ * confirm/prompt dialogs. Selectors below were grepped directly out of
+ * docs/runtime/chat.js (.msg-tool-card/-header/-status/-label/-name/
+ * -chevron/-body/-args, .chat-divider, .chat-spinner) and docs/runtime/
+ * ui.js + index.html (#confirm-dialog, #confirm-title, #confirm-tool,
+ * .dialog-*) — every class here is one chat.js/ui.js already emits, none
+ * invented; no DOM or JS changed. */
+
+/* -- Stats as data (cont'd from .vp-report/.editor-status above): the
+ * chat-divider context line (main.js's formatReportLine/formatReferenceLine
+ * — "✓ manifold · 412 tri · 40×40×4" — passed to chat.js's appendDivider)
+ * isn't already mono like those two; bring it in line. Its ✓/✗ prefix
+ * can't get the same dual-channel color treatment as vp-report/
+ * editor-status though: chat.js builds this node with plain
+ * `.textContent`, a single unmarked text run with no sub-span for CSS to
+ * recolor independent of the rest of the line — left as the reference's
+ * quiet muted divider-label tone instead of faking it. */
+.chat-divider {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- Tool-call chips: chat.js's card is a full shadowed card today: pare it
+ * back to a slim hairline row (border already present on .msg-tool-card,
+ * hover already present on .msg-tool-header — both vendored, untouched)
+ * with the verb in muted text and the trailing detail riding in a small
+ * mono chip. .msg-tool-status keeps its existing success/error dual-channel
+ * color, also untouched. True Beautiful UI chips also collapse a run of
+ * calls into one collapsible "N tool calls" summary; chat.js renders one
+ * full card per call with no grouping hook, and building one is a
+ * vendored-file or real-DOM change — out of bounds here, skipped. */
+.msg-tool-card {
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+.msg-tool-header {
+  padding: 5px 10px;
+  gap: 6px;
+}
+.msg-tool-name {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.msg-tool-label {
+  padding: 2px 8px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+}
+.msg-tool-chevron { opacity: 0.55; }
+.msg-tool-args {
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* -- Approval card: #confirm-dialog / #prompt-dialog (index.html), opened
+ * by runtime/ui.js's showConfirmDialog/showPromptDialog — app-owned
+ * markup, styled so far only by chat.css's generic `dialog`/.dialog-*
+ * rules (hairline border, shadow already present there, untouched).
+ * #confirm-title carries the dialog's static "Confirm action" label and
+ * #confirm-tool the actual (dynamic) tool name — demote the former to a
+ * small muted label and promote the latter, matching the card's real
+ * hierarchy. ID selectors, not classes: .dialog-title is shared with
+ * #prompt-title, which has no second element to promote (ui.js never
+ * calls showPromptDialog in this app today, but the markup is real) — its
+ * one heading stays at chat.css's base .dialog-title size rather than
+ * being demoted into a label with nothing prominent left under it.
+ *
+ * Both dialogs also get the dark-glass token freeze above (added to that
+ * selector list) so they read as the same frozen-dark surface as every
+ * other floating panel instead of a stray white card in light theme — the
+ * dialog's own `background: var(--surface)` etc. (chat.css) then resolve
+ * to the frozen values with no further overrides needed here, same as the
+ * comment on that freeze rule already promises.
+ *
+ * margin:auto restores native <dialog> top-layer centering. app.css's
+ * blanket reset — `*, *::before, *::after { box-sizing: border-box;
+ * margin: 0; padding: 0; }` — is an AUTHOR-origin rule zeroing the UA
+ * stylesheet's own `dialog:modal { margin: auto; ... }` centering; author
+ * beats user-agent regardless of specificity, which is why a single `*`
+ * selector was winning over the browser's own more-specific dialog rule.
+ * Neither app.css nor chat.css sets `position`/`inset` on dialog, so only
+ * margin needed restoring here — the UA's fixed positioning still applies
+ * underneath. */
+dialog {
+  border-radius: 16px;
+  margin: auto;
+}
+dialog::backdrop {
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(6px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(6px) var(--glass-sat);
+}
+#confirm-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+#confirm-tool {
+  font-family: var(--mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.dialog-args {
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+}
+.dialog-actions button { border-radius: 100px; }
+
+/* -- Loading shimmer: one sweep keyframe reused for the editor's "busy"
+ * status text and the chat's thinking indicator. app.css's
+ * prefers-reduced-motion block is a blanket `* { transition: none
+ * !important; animation: none !important }` — it already covers
+ * animations, not just transitions, so no extra reduced-motion guard is
+ * needed here. */
+@keyframes cad-shimmer-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.editor-status.busy {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-muted) 0%, var(--text-muted) 40%,
+    var(--text) 50%,
+    var(--text-muted) 60%, var(--text-muted) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: cad-shimmer-sweep 1.2s linear infinite;
+}
+/* Belt-and-suspenders: background-clip:text is universal in evergreen
+ * browsers, but this is the app's only "is anything happening?" text
+ * during a run — degrade to plain muted text rather than risk invisible
+ * (transparent-on-transparent) status copy anywhere it isn't supported. */
+@supports not (background-clip: text) {
+  .editor-status.busy { background-image: none; color: var(--text-muted); }
+}
+.chat-spinner {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface-alt);
+}
+.chat-spinner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+  background-size: 200% 100%;
+  opacity: 0.7;
+  animation: cad-shimmer-sweep 1.2s linear infinite;
+}
+/* chat.js's bounce dots (chat-bounce keyframes, chat.css) are untouched —
+ * they just need lifting above the sweep, which paints behind them only
+ * because it's the absolutely-positioned one. */
+.chat-spinner span {
+  position: relative;
+  z-index: 1;
 }
 
 /* ---------- Fallbacks: no blur support, or the user has turned it off ----------
