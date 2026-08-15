@@ -1,23 +1,77 @@
-/* stl-studio layout: the canvas always fills every pixel below the header;
- * the script editor and chat are floating overlays docked left/right, each
- * independently toggleable, so opening/closing them never reflows the
- * viewport. Pairs with app.css (tokens, header, settings, dialogs) and
- * chat.css (chat surface + component styles) — both loaded unmodified from
- * webmcp. This file overrides their GRID layout (header/tools/source/work/
- * chat rows) with a single full-bleed content area, and repositions
- * .tools-panel / .chat-panel as overlays to match.
+/* stl-studio layout: the canvas always fills every pixel of the window —
+ * the header is a floating glass overlay (position:fixed), not a grid row
+ * that reserves space, and the script editor / chat panels are floating
+ * overlays docked left/right beneath it, each independently toggleable, so
+ * opening/closing them never reflows the viewport. Pairs with app.css
+ * (tokens, header, settings, dialogs) and chat.css (chat surface +
+ * component styles) — both loaded unmodified from webmcp. This file
+ * overrides their GRID layout (header/tools/source/work/chat rows) with a
+ * single full-bleed content area, takes the header out of grid flow
+ * entirely, and repositions .tools-panel / .chat-panel / .settings-popover
+ * as glass overlays to match — inspired by termd's frosted-glass chrome
+ * (../termd/web/styles.css), since the WebGL scene behind everything is
+ * always dark regardless of theme.
  *
  * `body`'s `display: grid` is `!important` in chat.css, but the specific
  * template properties below aren't — this file loads after chat.css, so
  * equal-specificity `body{...}` rules here win the cascade without needing
  * !important of our own. */
 
+/* ---------- Glass recipe ----------
+ * One frost recipe, reused everywhere something floats over the canvas:
+ * a low-alpha dark veil + blur + saturation boost (termd's exact
+ * --glass-sat: saturate(180%)), a hairline border, and (for the smaller
+ * "pill" chrome — toggles, toolbar, report card, dropdowns) termd's
+ * lit-rim shadow (top highlight + specular + outer lift). Large panels get
+ * a plainer veil so the blur, not a shadow, carries the depth. */
+:root {
+  --glass-sat: saturate(180%);
+  --glass-veil: rgba(13, 15, 18, .62);
+  --glass-veil-dense: rgba(13, 15, 18, .8);
+  --glass-hairline: 1px solid rgba(255, 255, 255, .07);
+  --glass-rim:
+    inset 0 1px 1px rgba(255, 255, 255, .12),
+    inset -7px -7px 12px -9px rgba(255, 255, 255, .14),
+    0 4px 14px rgba(0, 0, 0, .4);
+}
+
 body {
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
-  grid-template-areas: "header" "work";
+  grid-template-rows: 1fr;
+  grid-template-areas: "work";
 }
 main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
+
+/* ---------- Header: floating glass overlay, not a grid row ----------
+ * position:fixed removes it from grid flow entirely (out-of-flow children
+ * aren't grid items), so `main` gets the full 100dvh automatically — no
+ * header-height math needed anywhere else. Both theme branches already
+ * render header text as light-on-dark (app.css hardcodes white-ish text
+ * for the light theme's header, since it was always a dark bar) so
+ * committing the background itself to dark glass in both themes needs no
+ * text/token overrides here — see the dark-glass freeze further down for
+ * the panels where that isn't already true. */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--glass-veil);
+  backdrop-filter: blur(20px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
+  border-bottom: var(--glass-hairline);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05), 0 8px 24px rgba(0, 0, 0, .35);
+}
+/* Same values, repeated at matching specificity: app.css's own
+ * `html[data-theme="dark"] header` rule (0,1,2) outranks a bare `header`
+ * selector, so the override needs a same-shape selector to win the
+ * cascade rather than relying on source order alone. */
+html[data-theme="dark"] header {
+  background: var(--glass-veil);
+  border-bottom: var(--glass-hairline);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05), 0 8px 24px rgba(0, 0, 0, .35);
+}
 
 /* ---------- Full-bleed viewport ---------- */
 
@@ -41,10 +95,13 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
  * ~420px band at the left/right edges (below), so a left-aligned toolbar
  * would sit directly under the editor panel and be hidden whenever it's
  * open. Centering keeps it in the gap between the two, visible regardless
- * of which panels are open. */
+ * of which panels are open.
+ *
+ * top:64px (header's 52px + a 12px gap) keeps it — and the edge toggles,
+ * which share that offset — clear of the floating header above. */
 .viewport-toolbar {
   position: absolute;
-  top: 0;
+  top: 64px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
@@ -54,25 +111,32 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   gap: 6px;
   flex-wrap: wrap;
   padding: var(--space-sm) var(--space-md);
-  background: #14161cee;
-  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(14px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(14px) var(--glass-sat);
+  border: var(--glass-hairline);
+  border-radius: 999px;
+  box-shadow: var(--glass-rim);
 }
 
+/* Buttons read as glass pills nested inside the toolbar's own glass tray —
+ * a light tint (not another dark veil) is what makes each pill legible as
+ * a distinct control against the tray, so only the tray itself blurs. */
 .viewport-toolbar button {
-  background: rgba(30, 33, 43, 0.85);
+  background: rgba(255, 255, 255, .06);
   color: #eceef3;
-  border: 1px solid #3a3f52;
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
   padding: 5px 10px;
   font-size: var(--text-sm);
   cursor: pointer;
 }
-.viewport-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.viewport-toolbar button:hover { background: rgba(255, 255, 255, .1); border-color: var(--accent); color: var(--accent); }
 .viewport-toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.viewport-toolbar button.on { border-color: var(--accent); color: var(--accent); }
+.viewport-toolbar button.on { background: rgba(255, 255, 255, .1); border-color: var(--accent); color: var(--accent); }
 .viewport-toolbar button:disabled { opacity: .4; cursor: default; }
-.viewport-toolbar button:disabled:hover { border-color: #3a3f52; color: #eceef3; }
-.viewport-toolbar .vp-sep { width: 1px; height: 20px; background: #3a3f52; margin: 0 2px; }
+.viewport-toolbar button:disabled:hover { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .1); color: #eceef3; }
+.viewport-toolbar .vp-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, .15); margin: 0 2px; }
 
 .vp-empty {
   position: absolute;
@@ -95,9 +159,12 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   font-family: var(--mono);
   font-size: var(--text-xs);
   color: #eceef3;
-  background: #131722cc;
-  border: 1px solid #3a3f52;
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(14px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(14px) var(--glass-sat);
+  border: var(--glass-hairline);
   border-radius: var(--radius-sm);
+  box-shadow: var(--glass-rim);
   padding: 8px 10px;
   text-align: right;
   line-height: 1.6;
@@ -106,24 +173,67 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
 .vp-report .vp-report-bad { color: var(--risk-high, #ef4444); }
 .vp-report .vp-report-dim { color: #9aa3bb; }
 
+/* ---------- Dark-glass token freeze ----------
+ * The canvas behind every floating surface is always #14161c, in both
+ * themes — a light theme's white --surface/--text tokens would need
+ * near-solid alpha to stay legible over it, which defeats the point of an
+ * overlay. Rather than maintain two low-alpha recipes, these panels commit
+ * to the dark theme's own token values regardless of html[data-theme],
+ * same as termd's sidebar: one glass recipe, and every var(--surface) /
+ * var(--text) / var(--accent) etc. used by app.css/chat.css inside them
+ * (chat bubbles, tool cards, badges, the tools-panel's tool-item cards,
+ * the settings popover) resolves correctly with no further overrides. */
+.editor-pane,
+.chat-panel,
+.tools-panel,
+.settings-popover {
+  color-scheme: dark;
+  --surface: #1a1d24;
+  --surface-alt: #21252d;
+  --border: #2d3139;
+  --text: #e8eaf0;
+  --text-muted: #8b92a5;
+  --bg: #0f1117;
+  --accent: #2dd4bf;
+  --accent-dim: #0f3935;
+  --risk-low: #22c55e;
+  --risk-med: #f59e0b;
+  --risk-high: #ef4444;
+  --badge-green-bg: #052e16;
+  --badge-amber-bg: #3d1f00;
+  --badge-red-bg: #3d0a0a;
+  --badge-cyan-bg: #0f3935;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3), 0 1px 2px rgba(0, 0, 0, .2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, .5), 0 4px 8px rgba(0, 0, 0, .3);
+}
+
 /* ---------- Floating side panels (editor left, chat right) ----------
  * Fixed to the viewport, not the grid — they overlay the canvas rather
  * than sharing space with it. Sliding them off-screen via transform (not
  * display:none) keeps the slide-out transition and means the canvas's own
- * size is never affected by panel state. */
-
+ * size is never affected by panel state.
+ *
+ * top:0, not top:52px: the panel's own glass now runs the full viewport
+ * height, continuing underneath the floating header (z-index 30 > 20)
+ * rather than stopping at its bottom edge — "the glass shows canvas
+ * through everywhere" the brief asked for. padding-top:52px pushes the
+ * panel's actual content (editor-toolbar / chat-header and everything
+ * below) down to the exact spot it already occupied under the old
+ * top:52px layout, so nothing before this line needed to move — only the
+ * translucent backdrop above it got taller. */
 .editor-pane,
 .chat-panel {
   position: fixed;
-  top: 52px; /* header height */
+  top: 0;
   bottom: 0;
   z-index: 20;
   width: min(420px, 92vw);
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  padding-top: 52px; /* header height */
+  background: var(--glass-veil);
+  backdrop-filter: blur(20px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
   box-shadow: var(--shadow-lg);
   transition: transform 220ms var(--ease);
   /* Reset webmcp's chat-panel-as-grid-card styling — it's a full-height
@@ -136,17 +246,10 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   max-height: none;
 }
 
-.editor-pane {
-  left: 0;
-  border-right: 1px solid var(--border);
-  border-left: none;
-}
+.editor-pane { left: 0; border-right: var(--glass-hairline); border-left: none; }
 .editor-pane[data-open="false"] { transform: translateX(-100%); }
 
-.chat-panel {
-  right: 0;
-  border-left: 1px solid var(--border);
-}
+.chat-panel { right: 0; border-left: var(--glass-hairline); }
 .chat-panel[data-open="false"] { transform: translateX(100%); }
 
 @media (max-width: 900px) {
@@ -169,14 +272,17 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 33, 43, 0.85);
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(14px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(14px) var(--glass-sat);
   color: #eceef3;
-  border: 1px solid #3a3f52;
+  border: var(--glass-hairline);
   border-radius: var(--radius-sm);
   cursor: pointer;
   padding: 0;
+  box-shadow: var(--glass-rim);
 }
-.edge-toggle:hover { background: rgba(45, 51, 68, 0.95); color: var(--accent); border-color: var(--accent); }
+.edge-toggle:hover { background: rgba(45, 51, 68, .95); color: var(--accent); border-color: var(--accent); }
 .edge-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .edge-toggle.on { color: var(--accent); border-color: var(--accent); }
 
@@ -290,12 +396,74 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   width: min(420px, 90vw);
   max-height: 0;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(20px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
+  border: var(--glass-hairline);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--glass-rim);
 }
-.tools-panel[data-collapsed="false"] { max-height: min(60vh, 600px); overflow-y: auto; }
+.tools-panel[data-collapsed="false"] {
+  max-height: min(60vh, 600px);
+  overflow-y: auto;
+  /* app.css's own [data-collapsed="false"] rule turns this edge solid
+   * (var(--border)) on expand; keep it the same hairline as the other 3
+   * sides instead of letting that higher-specificity rule win just here. */
+  border-bottom-color: rgba(255, 255, 255, .07);
+}
 
-/* ---------- chat-panel: float, don't reserve a grid column ---------- */
+/* ---------- settings popover ----------
+ * Styled in chat.css as a plain var(--surface) card; overridden here to
+ * match the rest of the floating chrome. Text/border/shadow tokens inside
+ * it already come from the dark-glass freeze above. */
+.settings-popover {
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(20px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
+  border: var(--glass-hairline);
+  box-shadow: var(--glass-rim);
+}
 
-.chat-panel { grid-area: unset; }
+/* ---------- Fallbacks: no blur support, or the user has turned it off ----------
+ * Browsers without backdrop-filter would otherwise show low-alpha text
+ * directly on raw canvas/WebGL noise — bump every glass surface to a
+ * near-solid dark fill instead. Layered on the same selectors regardless
+ * of theme (the dark-glass freeze already made the light-theme tokens
+ * irrelevant inside these panels), plus the two theme-scoped header rules. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  header,
+  html[data-theme="dark"] header,
+  .editor-pane,
+  .chat-panel,
+  .tools-panel,
+  .settings-popover {
+    background: rgba(13, 15, 18, .96);
+  }
+  .viewport-toolbar,
+  .vp-report,
+  .edge-toggle {
+    background: rgba(13, 15, 18, .94);
+  }
+  .viewport-toolbar button { background: rgba(40, 44, 54, .9); }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  header,
+  html[data-theme="dark"] header,
+  .editor-pane,
+  .chat-panel,
+  .tools-panel,
+  .settings-popover {
+    background: rgba(13, 15, 18, .96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .viewport-toolbar,
+  .vp-report,
+  .edge-toggle {
+    background: rgba(13, 15, 18, .94);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .viewport-toolbar button { background: rgba(40, 44, 54, .9); }
+}
