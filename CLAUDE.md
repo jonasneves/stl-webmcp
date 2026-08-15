@@ -47,6 +47,18 @@ Non-obvious design decisions and gotchas. Read the header comments in `main.js`,
   see this app's own system prompt (`getSystemPrompt()` + `API_REFERENCE`), never the operator's
   global `~/.claude` config. Requires a termd build with the `settingSources` knob (`../termd`).
 
+## UI/UX reference
+
+- Owner directive: use https://www.beautifului.dev/ ("Beautiful UI" — primitives for AI-native
+  interfaces) as the reference for ALL UI/UX elements, icons, and effects.
+- Its language, distilled: near-black neutral surfaces; hairline 1px borders and dotted dividers;
+  ONE accent hue used sparingly; small rounded pills and segmented controls; tiny muted numbered/
+  uppercase section labels; monospace tabular numerals for stats (elapsed time, counts, dims);
+  tool calls as compact chips (icon + verb + mono detail, collapsible "N tool calls" summary);
+  quiet human-in-the-loop approval cards; shimmer for loading; restrained motion.
+- Pair it with termd's frosted-glass recipe already in `cad.css` (see ../termd/web/styles.css,
+  glass-pill family): glass surfaces carry Beautiful UI's restraint and detailing.
+
 ## Build
 
 - No build step: static `docs/` site, ESM imports straight from jsDelivr, no npm install/bundler.
