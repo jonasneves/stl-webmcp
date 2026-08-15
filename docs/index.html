@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -19,7 +19,7 @@
   <div class="main-column">
     <div class="hud hud-left">
       <button id="panel-toggle-left" class="edge-toggle" type="button"
-        aria-expanded="true" aria-controls="editor-pane" title="Toggle script panel">
+        aria-expanded="true" aria-controls="editor-pane" title="Toggle script panel" aria-label="Toggle script panel">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <defs><clipPath id="clip-toggle-left-hud"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
           <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
@@ -38,19 +38,18 @@
     <div class="hud hud-right">
       <div class="settings-wrap">
         <button class="settings-btn" id="settings-btn" aria-label="Settings" aria-expanded="false" aria-controls="settings-popover" title="Settings">
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-            <path d="M6.08 1.5a.5.5 0 0 0-.495.43l-.198 1.382a4.5 4.5 0 0 0-.968.565L3.1 3.29a.5.5 0 0 0-.617.172L1.5 4.9a.5.5 0 0 0 .1.657l1.1.9A4.5 4.5 0 0 0 2.6 7.5c0 .328.034.648.1.943l-1.1.9a.5.5 0 0 0-.1.657l.984 1.438a.5.5 0 0 0 .617.172l1.319-.588c.298.213.617.398.968.565l.198 1.383a.5.5 0 0 0 .495.43h1.84a.5.5 0 0 0 .495-.43l.198-1.383a4.5 4.5 0 0 0 .968-.565l1.319.588a.5.5 0 0 0 .617-.172L13.4 10a.5.5 0 0 0-.1-.657l-1.1-.9c.066-.295.1-.615.1-.943s-.034-.648-.1-.943l1.1-.9A.5.5 0 0 0 13.5 4.9l-.984-1.438a.5.5 0 0 0-.617-.172l-1.319.588a4.5 4.5 0 0 0-.968-.565L9.415 1.93A.5.5 0 0 0 8.92 1.5H6.08ZM7.5 9.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" fill="currentColor"/>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M10 2.5L12.75 5.24L16.5 6.25L15.5 10L16.5 13.75L12.75 14.76L10 17.5L7.25 14.76L3.5 13.75L4.5 10L3.5 6.25L7.25 5.24Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <circle cx="10" cy="10" r="2.2" stroke="currentColor" stroke-width="1.5"/>
           </svg>
         </button>
         <div class="settings-popover" id="settings-popover" hidden role="dialog" aria-label="Settings">
-          <div class="settings-section">
-            <div class="settings-section-label">Appearance</div>
-            <div class="theme-toggle" role="group" aria-label="Color theme">
-              <button class="theme-opt" data-theme="system">System</button>
-              <button class="theme-opt" data-theme="light">Light</button>
-              <button class="theme-opt" data-theme="dark">Dark</button>
-            </div>
-          </div>
+          <!-- Appearance/theme section removed: every surface in this app is
+               frozen dark-glass (cad.css's dark-token freeze) regardless of
+               html[data-theme], so the System/Light/Dark control had zero
+               observable effect. The design has committed to dark instead —
+               see the boot script below. Local agent is now the popover's
+               only section. -->
           <div class="settings-section">
             <div class="settings-section-label">Local agent</div>
             <select class="chat-model-select" id="model-select" aria-label="Model">
@@ -67,7 +66,7 @@
         </div>
       </div>
       <button id="panel-toggle-right" class="edge-toggle" type="button"
-        aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel">
+        aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel" aria-label="Toggle chat panel">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <defs><clipPath id="clip-toggle-right-hud"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
           <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
@@ -79,14 +78,42 @@
     <main>
       <section class="viewport-pane">
         <div class="viewport-toolbar">
+          <!-- #vp-wireframe's icon is a cad.css ::before background-image, not an
+               inline <svg>, unlike its four siblings below: main.js reassigns this
+               button's textContent on every click (to flip the "on"/"off" word),
+               which would wipe out a real DOM child every time — a pseudo-element
+               isn't a child, so it survives. -->
           <button id="vp-wireframe" aria-pressed="false">Wireframe: off</button>
-          <button id="vp-grid" class="on" aria-pressed="true">Grid</button>
-          <button id="vp-reset" disabled>Reset view</button>
+          <button id="vp-grid" class="on" aria-pressed="true">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M7.5 3L7.5 17M12.5 3L12.5 17M3 7.5L17 7.5M3 12.5L17 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Grid
+          </button>
+          <button id="vp-reset" disabled>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <circle cx="10" cy="10" r="6" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M10 1L10 4M10 16L10 19M1 10L4 10M16 10L19 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Reset view
+          </button>
           <span class="vp-sep"></span>
-          <button id="vp-open" title="Load an STL — usable as imported() in scripts if it's a valid manifold, view-only otherwise">Import&#8230;</button>
+          <button id="vp-open" title="Load an STL — usable as imported() in scripts if it's a valid manifold, view-only otherwise">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 7V4H16V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 18V7.5M6.5 11L10 7.5L13.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Import&#8230;
+          </button>
           <input id="vp-file" type="file" accept=".stl" hidden>
           <span class="vp-sep"></span>
-          <button id="vp-export" disabled>Export STL</button>
+          <button id="vp-export" disabled>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 13V16H16V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 2V18M6.5 14.5L10 18L13.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Export STL
+          </button>
         </div>
         <canvas id="gl"></canvas>
         <div id="vp-empty" class="vp-empty">No shape yet — describe one in chat, or write a script and hit Run.</div>
@@ -110,7 +137,7 @@
 
   <aside class="chat-panel" id="chat-panel-el" data-open="true">
     <div class="chat-header">
-      <span class="chat-header-title">AI Chat</span>
+      <span class="chat-header-title">Chat</span>
       <span class="chat-model-label" id="chat-model-label">Claude</span>
       <button class="btn btn-sm" id="chat-reset" aria-label="Clear chat">Clear</button>
     </div>
@@ -124,8 +151,8 @@
           </svg>
         </button>
         <button class="chat-abort-btn" id="chat-abort" hidden aria-label="Stop generating" title="Stop">
-          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
-            <rect width="11" height="11" rx="2" fill="currentColor"/>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
           </svg>
         </button>
       </div>
@@ -162,13 +189,15 @@
   </dialog>
 
   <script>
-    (function () {
-      const stored = localStorage.getItem('webmcp-theme') || 'system';
-      const resolved = stored === 'system'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : stored;
-      document.documentElement.dataset.theme = resolved;
-    })();
+    // The design has committed to dark — no Appearance switcher (see the
+    // settings popover above). This also seeds localStorage under the key
+    // docs/runtime/theme.js reads: main.js's mount() unconditionally calls
+    // that vendored module's initTheme() later, which re-resolves the theme
+    // from storage (defaulting to the OS's own light/dark preference) — a
+    // bare `dataset.theme = 'dark'` here would get silently overwritten a
+    // moment later for anyone whose system prefers light.
+    localStorage.setItem('webmcp-theme', 'dark');
+    document.documentElement.dataset.theme = 'dark';
   </script>
   <script type="importmap">
   {

@@ -76,7 +76,12 @@ self.onmessage = async (e) => {
         [mesh.vertProperties.buffer, mesh.triVerts.buffer],
       );
     } catch (err) {
-      self.postMessage({ type: 'run-result', requestId, ok: false, error: err.message || String(err) });
+      // A caught WASM trap (out-of-bounds memory access, unreachable, bad
+      // table index) leaves the cached Manifold/Mesh module instance corrupt
+      // — the NEXT run, even a valid one, would hang instead of erroring.
+      // Flag it so main.js restarts this worker instead of reusing it.
+      const fatal = err instanceof WebAssembly.RuntimeError || /memory access|unreachable|table index/i.test(err.message || '');
+      self.postMessage({ type: 'run-result', requestId, ok: false, error: err.message || String(err), ...(fatal && { fatal: true }) });
     } finally {
       for (const m of tracked) { try { m.delete?.(); } catch { /* not disposable, ignore */ } }
     }

@@ -32,6 +32,7 @@ const openBtn = document.getElementById('vp-open');
 const fileInput = document.getElementById('vp-file');
 const exportBtn = document.getElementById('vp-export');
 const emptyEl = document.getElementById('vp-empty');
+const DEFAULT_EMPTY_HINT = emptyEl.textContent; // restored whenever a non-empty geometry lands, or on reset — see the empty-result branch in runScript
 const reportEl = document.getElementById('vp-report');
 const dropIndicatorEl = document.getElementById('drop-indicator');
 const editorEl = document.getElementById('editor');
@@ -222,11 +223,11 @@ function updateReferenceReportPanel() {
   reportEl.innerHTML =
     `<div class="vp-report-dim">import: ${escapeHtml(r.filename)}</div>` +
     `<div class="vp-report-dim">${r.numTri.toLocaleString()} tri · ${fmt(r.size.x)}×${fmt(r.size.y)}×${fmt(r.size.z)}</div>` +
-    `<div class="${usable ? '' : 'vp-report-bad'}">${usable ? '✓ usable as imported()' : r.importStatus === 'pending' ? 'checking…' : '✗ view-only: ' + escapeHtml(r.importError || 'not a valid manifold')}</div>`;
+    `<div class="${usable ? 'vp-report-good' : 'vp-report-bad'}">${usable ? '✓ usable as imported()' : r.importStatus === 'pending' ? 'checking…' : '✗ view-only: ' + escapeHtml(r.importError || 'not a valid manifold')}</div>`;
   reportEl.hidden = false;
 }
 
-function handleReferenceFile(file) {
+function handleReferenceFile(file, importingSuffix = '…') {
   if (!file) return;
   if (!/\.stl$/i.test(file.name)) { setStatus(`"${file.name}" isn't a .stl file.`, 'bad'); return; }
   const reader = new FileReader();
@@ -246,7 +247,7 @@ function handleReferenceFile(file) {
     };
     exportBtn.disabled = true;
     updateReferenceReportPanel();
-    setStatus(`Importing "${file.name}"…`, 'busy');
+    setStatus(`Importing "${file.name}"${importingSuffix}`, 'busy');
 
     // manifold-3d's import constructor needs real shared-vertex topology at
     // triangle edges to read as a 2-manifold — a raw STL has none at all
@@ -261,25 +262,52 @@ function handleReferenceFile(file) {
     // cube welds to its correct 8 vertices with normals stripped first, but
     // only to 24 (6 faces × 4 corners, merged per-face only) if they ride
     // along — the exact shape of "why did a known-good cube fail to import."
-    const weldGeometry = geometry.clone();
-    weldGeometry.deleteAttribute('normal');
-    const welded = mergeVertices(weldGeometry);
-    const positions = welded.attributes.position.array;
-    const rawIndex = welded.index.array;
-    const triVerts = rawIndex instanceof Uint32Array ? rawIndex : Uint32Array.from(rawIndex);
+    let positions, triVerts;
+    try {
+      const weldGeometry = geometry.clone();
+      weldGeometry.deleteAttribute('normal');
+      const welded = mergeVertices(weldGeometry);
+      positions = welded.attributes.position.array;
+      const rawIndex = welded.index.array;
+      triVerts = rawIndex instanceof Uint32Array ? rawIndex : Uint32Array.from(rawIndex);
+    } catch (err) {
+      // Unguarded, this throw used to leave importStatus stuck at 'pending'
+      // ("checking…") forever, plus an unhandled rejection — route it
+      // through the same failed-import outcome as a worker-side rejection.
+      if (state.referenceInfo) {
+        state.referenceInfo.importStatus = 'failed';
+        state.referenceInfo.importError = err.message || String(err);
+      }
+      if (state.mode === 'reference') {
+        updateReferenceReportPanel();
+        setStatus(`"${file.name}" loaded for viewing — not usable in scripts: ${err.message || String(err)}`, 'bad');
+      }
+      return;
+    }
 
     try {
       const result = await cadWorker.import({ vertProperties: positions, triVerts, numProp: 3 });
-      state.referenceInfo.importStatus = 'ok';
-      updateReferenceReportPanel();
-      setStatus(`Imported "${file.name}" — usable in scripts as imported(). ${formatReportLine(result.report)}`, 'ok');
+      // referenceInfo can be null by the time this await resolves —
+      // reset_script clears it mid-flight — which used to throw here.
+      if (state.referenceInfo) state.referenceInfo.importStatus = 'ok';
+      // mode-gated: this import check can still be pending when a script run
+      // finishes and flips mode back to 'authored' — without this, the late
+      // import completion would overwrite that run's report/status.
+      if (state.mode === 'reference') {
+        updateReferenceReportPanel();
+        setStatus(`Imported "${file.name}" — usable in scripts as imported(). ${formatReportLine(result.report)}`, 'ok');
+      }
     } catch (err) {
       // Not a bug — common for scanned/sculpted meshes. Still shown for
       // viewing; just not usable as a CSG operand.
-      state.referenceInfo.importStatus = 'failed';
-      state.referenceInfo.importError = err.message || String(err);
-      updateReferenceReportPanel();
-      setStatus(`"${file.name}" loaded for viewing — not usable in scripts: ${state.referenceInfo.importError}`, '');
+      if (state.referenceInfo) {
+        state.referenceInfo.importStatus = 'failed';
+        state.referenceInfo.importError = err.message || String(err);
+      }
+      if (state.mode === 'reference') {
+        updateReferenceReportPanel();
+        setStatus(`"${file.name}" loaded for viewing — not usable in scripts: ${err.message || String(err)}`, '');
+      }
     }
   };
   reader.readAsArrayBuffer(file);
@@ -300,15 +328,22 @@ window.addEventListener('drop', e => {
   e.preventDefault();
   dragDepth = 0;
   dropIndicatorEl.hidden = true;
-  handleReferenceFile(e.dataTransfer.files[0]);
+  const files = e.dataTransfer.files;
+  const extra = files.length - 1;
+  // Only one file imports at a time (cadWorker holds a single persistent
+  // import slot) — say so instead of silently dropping the rest on the floor.
+  const suffix = extra > 0 ? ` — ${extra} more file${extra === 1 ? '' : 's'} ignored (one at a time).` : '…';
+  handleReferenceFile(files[0], suffix);
 });
 
 // ---------- CSG worker client ----------
-// Note: a worker respawn (script timeout below) drops the persistent
-// imported-reference state worker.js holds — the next imported() call
-// throws its own clear "nothing imported yet" error rather than silently
-// using stale data, so this degrades honestly rather than needing its own
-// recovery path.
+// A worker respawn (script timeout, or a fatal WASM trap reported by
+// worker.js's run handler — see its catch there) drops the persistent
+// imported-reference state worker.js holds. cadWorker.onRestart (wired
+// below, once state exists) is the recovery path: it flips referenceInfo to
+// 'failed' so getSystemPrompt() and the report panel stop claiming
+// imported() still works, instead of the agent finding out only when the
+// next imported() call throws.
 class CadWorker {
   constructor() { this.pending = new Map(); this.reqId = 0; this._spawn(); }
   _spawn() {
@@ -323,6 +358,11 @@ class CadWorker {
     clearTimeout(p.timer);
     this.pending.delete(msg.requestId);
     msg.ok ? p.resolve(msg) : p.reject(new Error(msg.error));
+    // fatal: worker.js caught a WASM trap — its cached Manifold/Mesh
+    // instance is corrupt, so even a valid NEXT run would hang instead of
+    // erroring. This request already got its own real error above; restart
+    // for everything still queued behind it.
+    if (!msg.ok && msg.fatal) this._restart('worker restarted after a fatal WASM error.');
   }
   // Shared by worker onerror (every pending request fails alike) and
   // _call's timeout (one culprit request plus N collateral ones sharing its
@@ -333,20 +373,26 @@ class CadWorker {
     for (const [id, p] of this.pending) { clearTimeout(p.timer); p.reject(new Error(toMessage(id))); }
     this.pending.clear();
   }
+  // Shared by a script timeout (worker never responds) and a fatal WASM trap
+  // (worker responds, but its cached kernel state is corrupt either way) —
+  // both mean the worker itself is unusable, not just one request, so fail
+  // the whole map before terminating; otherwise their still-scheduled
+  // timers would each later fire and terminate the NEW healthy worker in
+  // turn. onRestart is page-level cleanup wired in below, keeping this
+  // class itself state-agnostic.
+  _restart(messageFor) {
+    this._failAll(messageFor);
+    this.worker.terminate();
+    this._spawn();
+    this.onRestart?.();
+  }
   _call(type, payload, timeoutMs, transfer) {
     const requestId = ++this.reqId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        // A timeout means the WORKER is stuck (infinite loop, pathological
-        // boolean) — respawning it orphans every other pending request on
-        // this worker too, not just this one, so fail the whole map before
-        // terminating; otherwise their still-scheduled timers would each
-        // later fire and terminate the NEW healthy worker in turn.
-        this._failAll((id) => id === requestId
+        this._restart((id) => id === requestId
           ? `${type} timed out after ${timeoutMs}ms (possible infinite loop) — worker restarted.`
           : 'worker restarted after another request timed out.');
-        this.worker.terminate();
-        this._spawn();
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.worker.postMessage({ type, requestId, ...payload }, transfer || []);
@@ -372,8 +418,18 @@ const state = {
   mode: 'authored',
   referenceInfo: null, // {filename, numTri, size} — set only in 'reference' mode; see handleReferenceFile
 };
+// See the CadWorker comment above: a respawn drops worker.js's persistent
+// import, but leaves this state believing it's still 'ok' unless told
+// otherwise.
+cadWorker.onRestart = () => {
+  if (state.referenceInfo?.importStatus === 'ok') {
+    state.referenceInfo.importStatus = 'failed';
+    state.referenceInfo.importError = 'lost when the CSG worker restarted — re-import the file';
+    if (state.mode === 'reference') updateReferenceReportPanel();
+  }
+};
 function formatReferenceLine(r) {
-  return `reference "${r.filename}" · ${r.numTri.toLocaleString()} tri · ${fmt(r.size.x)}×${fmt(r.size.y)}×${fmt(r.size.z)}`;
+  return `imported "${r.filename}" · ${r.numTri.toLocaleString()} tri · ${fmt(r.size.x)}×${fmt(r.size.y)}×${fmt(r.size.z)}`;
 }
 
 function fmt(n, d = 2) { return Number(n).toFixed(d); }
@@ -399,11 +455,21 @@ function updateReportPanel(r) {
   const [sx, sy, sz] = r.bbox.size;
   const flagLine = r.empty
     ? `<div class="vp-report-bad">⚠ empty result — shapes may not overlap</div>`
-    : `<div class="${r.manifold ? '' : 'vp-report-bad'}">${r.manifold ? '✓ manifold' : '✗ ' + escapeHtml(r.status)}</div>`;
+    : `<div class="${r.manifold ? 'vp-report-good' : 'vp-report-bad'}">${r.manifold ? '✓ manifold' : '✗ ' + escapeHtml(r.status)}</div>`;
   reportEl.innerHTML =
     flagLine +
     `<div class="vp-report-dim">${r.numTri.toLocaleString()} triangles</div>` +
     `<div class="vp-report-dim">${fmt(sx)} × ${fmt(sy)} × ${fmt(sz)}</div>`;
+  reportEl.hidden = false;
+}
+// runScript's catch calls this instead of leaving the report card showing
+// the previous run's (possibly green) result while the editor status turns
+// red — the card is the viewport's status surface, so it has to agree.
+function updateReportPanelError(message) {
+  const snippet = message.length > 140 ? message.slice(0, 140) + '…' : message;
+  reportEl.innerHTML =
+    `<div class="vp-report-bad">✗ run failed</div>` +
+    `<div class="vp-report-dim">${escapeHtml(snippet)}</div>`;
   reportEl.hidden = false;
 }
 
@@ -474,7 +540,9 @@ historySelect.addEventListener('change', () => {
 })();
 
 async function runScript(code, { record = true } = {}) {
+  if (state.busy) return { ok: false, error: 'Already running.' };
   state.busy = true;
+  runBtn.disabled = true;
   setStatus('Running…', 'busy');
   try {
     const msg = await cadWorker.run(code);
@@ -486,20 +554,34 @@ async function runScript(code, { record = true } = {}) {
     // alone here: that's the whole point of imported(), staying usable across runs.
     applyManifoldMesh(msg.mesh);
     updateReportPanel(msg.report);
+    // applyManifoldMesh -> applyGeometry always hides emptyEl, even for a
+    // 0-triangle result (empty geometry is still "a geometry") — an empty
+    // result needs its own on-canvas explanation instead of a bare grid.
+    if (msg.report.empty) {
+      emptyEl.textContent = 'Empty result — the shapes may not overlap. Adjust the script and re-run.';
+      emptyEl.hidden = false;
+    } else {
+      emptyEl.textContent = DEFAULT_EMPTY_HINT;
+    }
     // A non-manifold (or NonFiniteVertex) result can still serialize to STL
     // bytes containing NaN/Infinity, and an empty (0-tri) one has nothing
     // to write at all — Export stays off until reportOk() says otherwise.
     exportBtn.disabled = !reportOk(msg.report);
     setStatus(formatReportLine(msg.report), reportOk(msg.report) ? 'ok' : 'bad');
-    if (record) pushHistory(code, true);
+    // reportOk, not bare success: an empty (0-tri) result still resolves —
+    // manifold-3d reports NoError for it — so history would otherwise mark
+    // an almost-certainly-wrong run with the same ✓ as a real one.
+    if (record) pushHistory(code, reportOk(msg.report));
     return { ok: true, report: msg.report };
   } catch (err) {
     state.lastError = err.message;
     setStatus(err.message, 'bad');
+    updateReportPanelError(err.message); // else the card keeps showing the previous (possibly green) run
     if (record) pushHistory(code, false);
     return { ok: false, error: err.message };
   } finally {
     state.busy = false;
+    runBtn.disabled = false;
   }
 }
 
@@ -602,7 +684,7 @@ function getDividerContext() {
 const TOOL_DEFS = [
   {
     name: 'write_script',
-    title: 'Write CSG script',
+    title: 'Write script',
     description: 'Replace the current CSG script and render it. Returns the render report (manifold check, triangle count, bbox) or a caught error to fix.',
     readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false,
     schema: {
@@ -620,7 +702,7 @@ const TOOL_DEFS = [
   {
     name: 'get_render_report',
     title: 'Get render report',
-    description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume. If an imported file is open instead of an authored shape, returns its filename/triangle count/dimensions and whether it imported as a usable manifold (usable via imported() in scripts) or view-only (common for scanned/sculpted meshes) — this is your only way to learn that; you cannot read its raw geometry, only what this and capture_view show you. Also reports an imported reference that exists but isn\'t currently on screen.',
+    description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume. If an imported file is open instead of an authored shape, returns its filename/triangle count/dimensions and whether it imported as a usable manifold (usable via imported() in scripts) or view-only (common for scanned/sculpted meshes) — this is your only way to learn that; you cannot read its raw geometry, only what this and capture_view show you. Also reports an imported file that exists but isn\'t currently on screen.',
     readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
     schema: { type: 'object', properties: {} },
     exec: async () => {
@@ -653,7 +735,7 @@ const TOOL_DEFS = [
   {
     name: 'capture_view',
     title: 'Capture viewport image',
-    description: 'Render the current shape (or reference file, if one is open) from a named camera angle and return it as an image, so you can visually check the result instead of reasoning about numbers alone.',
+    description: 'Render the current shape (or imported file, if one is open) from a named camera angle and return it as an image, so you can visually check the result instead of reasoning about numbers alone.',
     readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
     schema: {
       type: 'object',
@@ -674,7 +756,11 @@ const TOOL_DEFS = [
   {
     name: 'export_stl',
     title: 'Export STL',
-    description: 'Serialize the current authored shape to a binary .stl and download it. Only works for the authored shape, not a reference file opened for comparison.',
+    // Starts with the full first sentence containing no earlier '.' (e.g.
+    // ".stl") — the vendored tools.js truncates a tool's displayed
+    // description at the first literal '.' it finds, which would otherwise
+    // cut this off mid-word.
+    description: 'Serialize the current authored shape to binary STL and download it. Only works for the authored shape, not an imported file opened for comparison.',
     readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false,
     schema: { type: 'object', properties: { filename: { type: 'string', description: 'Base filename; .stl is added if missing.' } } },
     exec: async ({ filename } = {}) => {
@@ -688,7 +774,7 @@ const TOOL_DEFS = [
   {
     name: 'reset_script',
     title: 'Reset script',
-    description: 'Clear the editor back to the starter template, remove the current shape, and drop any imported reference (imported() stops working). Wipes in-progress work.',
+    description: 'Clear the editor back to the starter template, remove the current shape, and drop the imported file (imported() stops working). Wipes in-progress work.',
     readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false,
     schema: { type: 'object', properties: {} },
     exec: async () => {
@@ -697,6 +783,7 @@ const TOOL_DEFS = [
       clearModel();
       state.lastMesh = null; state.lastReport = null; state.lastError = null;
       state.mode = 'authored'; state.referenceInfo = null;
+      emptyEl.textContent = DEFAULT_EMPTY_HINT;
       emptyEl.hidden = false; resetBtn.disabled = true; exportBtn.disabled = true;
       reportEl.hidden = true; setStatus('', '');
       try { await cadWorker.clearImport(); } catch { /* best-effort */ }
@@ -726,16 +813,15 @@ mount({
 // ---------- Floating panel toggles ----------
 // Editor and chat are position:fixed overlays (cad.css) — toggling them
 // only slides a transform, it never resizes the canvas underneath. Each
-// button's icon names which side it controls (fixed); .on marks whether
-// that panel is currently open. One control per action: the panels used to
-// also carry their own '✕' close button, redundant with the edge toggle
-// that already opens/closes the same panel — removed, so toggleBtn is the
-// only way in or out.
+// button's icon names which side it controls (fixed); aria-expanded marks
+// whether that panel is currently open (cad.css keys off the attribute, not
+// a class). One control per action: the panels used to also carry their own
+// '✕' close button, redundant with the edge toggle that already opens/
+// closes the same panel — removed, so toggleBtn is the only way in or out.
 function wirePanelToggle(toggleBtn, panelEl, storageKey) {
   const setOpen = (open) => {
     panelEl.dataset.open = String(open);
-    toggleBtn.setAttribute('aria-expanded', String(open));
-    toggleBtn.classList.toggle('on', open);
+    toggleBtn.setAttribute('aria-expanded', String(open)); // styling keys off this, not a class — see cad.css
     try { localStorage.setItem(storageKey, open ? '1' : '0'); } catch { /* private mode, ignore */ }
   };
   toggleBtn.addEventListener('click', () => setOpen(panelEl.dataset.open !== 'true'));
@@ -769,5 +855,15 @@ document.body.appendChild(chatLiveEl);
 let chatSettleTimer = null;
 new MutationObserver(() => {
   clearTimeout(chatSettleTimer);
-  chatSettleTimer = setTimeout(() => { chatLiveEl.textContent = 'Assistant replied.'; }, 800);
+  chatSettleTimer = setTimeout(() => {
+    // Bare 800ms DOM quiescence isn't "assistant replied" on its own: it's
+    // also what Clear leaves behind (0 children), and what a >800ms
+    // thinking pause looks like mid-turn (the spinner is still up, appended
+    // as a real child of this same element — see runtime/chat.js's
+    // showSpinner). Only announce once a message has actually landed.
+    if (!chatMessagesEl.children.length) return;
+    if (chatMessagesEl.querySelector('.chat-spinner')) return;
+    const last = chatMessagesEl.lastElementChild;
+    chatLiveEl.textContent = last.classList.contains('msg-error') ? 'Something went wrong.' : 'Assistant replied.';
+  }, 800);
 }).observe(chatMessagesEl, { childList: true, subtree: true, characterData: true });
