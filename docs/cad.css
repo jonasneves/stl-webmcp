@@ -98,7 +98,7 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
 .edge-toggle,
 .settings-btn,
 .tools-toggle,
-.hud .home-link,
+.app-menu-btn,
 .viewport-toolbar,
 .vp-report {
   background: var(--glass-veil-dense);
@@ -303,7 +303,7 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * none inherited the freeze) but each still reads var(--accent) or
  * var(--risk-*) directly — .viewport-toolbar and .vp-report via their own
  * child rules further down this file (button:hover/.on, .vp-report-bad),
- * .edge-toggle/.tools-toggle/.settings-btn/.hud .home-link on themselves
+ * .edge-toggle/.tools-toggle/.settings-btn/.app-menu-btn on themselves
  * (:hover/[aria-expanded]/.on) — over the same always-dark canvas as the
  * panels above. Without freezing them too, they silently forked colors
  * whenever html[data-theme] resolved to "light" (accent #0d9488 vs this
@@ -313,14 +313,16 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 .chat-panel,
 .tools-panel,
 .settings-popover,
+.app-menu,
 #confirm-dialog,
 #prompt-dialog,
+#api-dialog,
 .viewport-toolbar,
 .vp-report,
 .edge-toggle,
 .tools-toggle,
 .settings-btn,
-.hud .home-link {
+.app-menu-btn {
   color-scheme: dark;
   --surface: #1a1d24;
   --surface-alt: #21252d;
@@ -418,32 +420,161 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * is a mouse-era number — bump to a touch-appropriate minimum only where
  * the input actually is one. .viewport-toolbar button measures ~27.5px
  * tall (5px padding + text line-height, no explicit height) and
- * .edge-toggle a fixed 32px — both under the 40px touch target below. */
+ * .edge-toggle a fixed 32px — both under the 40px touch target below.
+ * .app-menu-item is ~31px (7px padding + text line-height) and joins them;
+ * the menu's own trigger is a 32px pill like .edge-toggle, but it lives in
+ * the .hud row whose height the other pills already set, so it takes the
+ * bump through its own rule rather than resizing the row. */
 @media (pointer: coarse) {
   .viewport-toolbar button { min-height: 40px; padding: 0 var(--space-md); }
   .edge-toggle { width: 40px; height: 40px; }
+  .app-menu-btn { height: 40px; }
+  .app-menu-item { min-height: 40px; }
+  .api-dialog-close { width: 40px; height: 40px; }
 }
 
 /* ---------- HUD cluster: wordmark, tools trigger, settings gear ----------
  * The other three pills in the HUD row — text-bearing, so a full pill
  * radius (999px) instead of the icon buttons' rounded square. Same glass
  * background as .edge-toggle (shared rule above); only shape/color/type
- * differ here. */
+ * differ here. The wordmark pill is also a dropdown trigger, so its menu
+ * surface is defined with it below rather than beside the other two. */
 
-.hud .home-link {
+.app-menu-wrap { position: relative; }
+
+.app-menu-btn {
   display: flex;
   align-items: center;
   height: 32px;
-  padding: 0 10px;
+  min-height: 0;
+  padding: 0 8px 0 10px;
   font-family: var(--mono);
   font-size: var(--text-xs);
-  color: #9aa3bb;
   border-radius: 999px;
   white-space: nowrap;
   flex-shrink: 0;
+  cursor: pointer;
 }
-.hud .home-link:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
-.hud .home-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Wordmark: "stl" bright + "-studio" dim, separated by WEIGHT and lightness
+ * only — no hue. Beautiful UI's one-accent rule is spent here on state, not
+ * identity: --accent is what every HUD pill turns when it's hovered or its
+ * panel is open, so a permanently teal half-wordmark would read as "this
+ * control is active" at rest and blunt that signal everywhere else. Both
+ * halves go accent together on hover/open, like the pills either side. */
+.app-menu-btn .logo-accent { font-weight: 700; color: #eceef3; }
+.app-menu-btn .logo-base { color: #9aa3bb; }
+.app-menu-btn .app-menu-caret {
+  margin-left: 5px;
+  color: #9aa3bb;
+  flex-shrink: 0;
+  transition: transform var(--duration) var(--ease);
+}
+.app-menu-btn:hover .logo-accent,
+.app-menu-btn:hover .logo-base,
+.app-menu-btn:hover .app-menu-caret,
+.app-menu-btn[aria-expanded="true"] .logo-accent,
+.app-menu-btn[aria-expanded="true"] .logo-base,
+.app-menu-btn[aria-expanded="true"] .app-menu-caret { color: var(--accent); }
+.app-menu-btn:hover,
+.app-menu-btn[aria-expanded="true"] { border-color: var(--accent); }
+.app-menu-btn[aria-expanded="true"] .app-menu-caret { transform: rotate(180deg); }
+.app-menu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- App menu dropdown ----------
+ * Anchored to its own trigger via .app-menu-wrap, the same wrapper pattern
+ * .tools-wrap/.settings-wrap use. Glass comes from the shared dropdown
+ * recipe further down (§ tools-panel), which this selector was added to —
+ * three consumers, one recipe. Plain `hidden` toggling rather than
+ * .tools-panel's max-height animation: that panel animates because its
+ * content height varies with the tool count, while this menu is a fixed
+ * four-row list where a slide adds latency to every open.
+ *
+ * Narrow viewports need no override (unlike .tools-panel, which goes
+ * position:fixed below): at 240px wide anchored to a trigger ~12px from the
+ * left edge, this menu cannot reach the right edge of any viewport the app
+ * is usable at. */
+.app-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 25;
+  width: 240px;
+  padding: var(--space-xs);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.app-menu[hidden] { display: none; }
+
+/* Tiny uppercase label + mono value — the reference's stat treatment, used
+ * here for the two pinned engine versions. Sits above a dotted rule rather
+ * than a solid one: it labels the surface, it isn't one of its actions. */
+.app-menu-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) 10px;
+  margin-bottom: var(--space-xs);
+  border-bottom: 1px dotted var(--border);
+}
+.app-menu-meta-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.app-menu-meta-value {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 0;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--text-sm);
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.app-menu-item svg { flex-shrink: 0; color: var(--text-muted); }
+.app-menu-item:hover { background: var(--surface-alt); text-decoration: none; }
+.app-menu-item:hover svg { color: var(--accent); }
+.app-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.app-menu-item:disabled { opacity: 0.4; cursor: default; }
+.app-menu-item:disabled:hover { background: transparent; }
+.app-menu-item:disabled:hover svg { color: var(--text-muted); }
+
+/* Same quiet-destructive treatment as #chat-reset (§ approval card): the
+ * risk hue appears on interaction, not at rest, so a row that is red all the
+ * time doesn't compete with the tool cards' own risk-high badges. */
+.app-menu-item.destructive:hover:not(:disabled),
+.app-menu-item.destructive:focus-visible:not(:disabled) { color: var(--risk-high); }
+.app-menu-item.destructive:hover:not(:disabled) svg { color: var(--risk-high); }
+
+/* The count is what makes the confirm step unnecessary: the row says how
+ * many runs it is about to discard before it's clicked, and main.js disables
+ * it outright at zero. Empty span collapses — :empty, since main.js writes
+ * '' rather than toggling hidden. */
+.app-menu-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.app-menu-count:empty { display: none; }
 
 .tools-toggle {
   height: 32px;
@@ -571,11 +702,12 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 
 .tools-wrap { position: relative; }
 
-/* Glass recipe shared with .settings-popover below — both are dropdown-
- * style overlays anchored to a trigger, unlike the plainer-veil side
- * panels above. */
+/* Glass recipe shared with .settings-popover below and .app-menu above —
+ * all three are dropdown-style overlays anchored to a trigger, unlike the
+ * plainer-veil side panels above. */
 .tools-panel,
-.settings-popover {
+.settings-popover,
+.app-menu {
   background: var(--glass-veil-dense);
   backdrop-filter: blur(20px) var(--glass-sat);
   -webkit-backdrop-filter: blur(20px) var(--glass-sat);
@@ -820,6 +952,79 @@ dialog::backdrop {
  * "Add" action and keeps the accent as-is. */
 #confirm-dialog .btn-confirm { background: var(--risk-high); color: #fff; }
 
+/* Script API sheet — a reference surface, not a decision, so it carries a
+ * header with its own × instead of the .dialog-actions button pair. The
+ * body is a <pre> holding kernel.js's API_REFERENCE verbatim: that string
+ * is plain indented text whose alignment IS the signature list, so it is
+ * displayed, never run through marked() like chat content. index.html's
+ * tabindex="0" on it keeps the scroll region keyboard-reachable — a
+ * scrollable box with no focusable content otherwise isn't.
+ *
+ * Sizing lives on [open], not the base selector: an author `display:flex`
+ * on a bare <dialog> overrides the UA stylesheet's `display:none` for the
+ * closed state, which would leave the sheet permanently on screen. */
+#api-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  /* Sized to the reference's longest line (the cylinder() signature, ~88
+   * mono chars) so it lands unwrapped on a desktop viewport — the whole
+   * reason for `white-space: pre` below is that these signatures line up
+   * column-wise, and a soft wrap mid-argument-list destroys exactly that.
+   * max-width has to be released explicitly: chat.css's `dialog` rule caps
+   * every dialog at 400px, which is right for the approval cards it was
+   * written for and would silently clamp `width` here (max-width wins over
+   * width regardless of this rule's higher specificity). */
+  width: min(760px, 94vw);
+  max-width: none;
+  max-height: 80vh;
+  padding: var(--space-md);
+}
+.api-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.api-dialog-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.api-dialog-close:hover { color: var(--accent); border-color: var(--accent); }
+.api-dialog-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* min-height:0 + flex:1 is what makes the body the only scrolling region —
+ * without it the <pre> sizes to its content and the dialog scrolls its
+ * header out of reach. */
+.api-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-md);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text);
+  /* pre, not pre-wrap: below the width above (narrow viewports) this scrolls
+   * sideways inside its own well rather than reflowing the signatures. */
+  white-space: pre;
+}
+.api-dialog-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* #chat-reset ("Clear") wipes the whole conversation with no confirm step
  * of its own — a quiet destructive cue on interaction, not at rest, so it
  * doesn't compete with the tool-card badges' own risk-high border. */
@@ -896,13 +1101,14 @@ dialog::backdrop {
   .editor-pane,
   .chat-panel,
   .tools-panel,
-  .settings-popover {
+  .settings-popover,
+  .app-menu {
     background: var(--glass-fallback-panel);
   }
   .viewport-toolbar,
   .vp-report,
   .edge-toggle,
-  .hud .home-link,
+  .app-menu-btn,
   .tools-toggle,
   .settings-btn,
   .drop-indicator,
@@ -918,7 +1124,8 @@ dialog::backdrop {
   .editor-pane,
   .chat-panel,
   .tools-panel,
-  .settings-popover {
+  .settings-popover,
+  .app-menu {
     background: var(--glass-fallback-panel);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -926,7 +1133,7 @@ dialog::backdrop {
   .viewport-toolbar,
   .vp-report,
   .edge-toggle,
-  .hud .home-link,
+  .app-menu-btn,
   .tools-toggle,
   .settings-btn,
   .drop-indicator,

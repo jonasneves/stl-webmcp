@@ -838,6 +838,59 @@ wirePanelToggle(
   document.getElementById('chat-panel-el'), 'stl-studio-chat-open',
 );
 
+// ---------- App menu (the wordmark) ----------
+// Disclosure, not role="menu" — see index.html for why. Dismiss grammar is
+// the menu half of CLAUDE.md § UI/UX principles (outside-click + Escape), wired here
+// rather than inherited: runtime/index.js has the same handler, but it's
+// hardcoded to the settings popover's own two element ids.
+const appMenuBtn = document.getElementById('app-menu-btn');
+const appMenuEl = document.getElementById('app-menu');
+const historyCountEl = document.getElementById('menu-history-count');
+const clearHistoryBtn = document.getElementById('menu-clear-history');
+
+// The row states what it will discard rather than asking to confirm it: a
+// count is cheaper to read than a modal is to dismiss, and at zero there's
+// nothing to warn about, so the row just goes inert.
+function syncHistoryMenuItem() {
+  const n = state.history.length;
+  historyCountEl.textContent = n ? String(n) : '';
+  clearHistoryBtn.disabled = n === 0;
+}
+function setAppMenuOpen(open) {
+  appMenuEl.hidden = !open;
+  appMenuBtn.setAttribute('aria-expanded', String(open)); // cad.css keys the caret flip + accent off this, not a class
+  if (open) syncHistoryMenuItem(); // history grows on every run — recount at open, not once at wire-up
+}
+appMenuBtn.addEventListener('click', () => setAppMenuOpen(appMenuEl.hidden));
+document.addEventListener('click', (e) => {
+  if (appMenuEl.hidden || appMenuEl.contains(e.target) || appMenuBtn.contains(e.target)) return;
+  setAppMenuOpen(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || appMenuEl.hidden) return;
+  setAppMenuOpen(false);
+  appMenuBtn.focus(); // Escape hands focus back to whatever opened the menu
+});
+
+clearHistoryBtn.addEventListener('click', () => {
+  state.history = [];
+  renderHistorySelect();
+  try { localStorage.removeItem(HISTORY_KEY); } catch { /* private mode, ignore */ }
+  syncHistoryMenuItem();
+});
+
+// API_REFERENCE is the exact text the assistant receives in its system
+// prompt (getSystemPrompt above); the human writing in the same editor had
+// no way to read it. textContent, not innerHTML — it's a plain string shown
+// as-is, so there's no markup to sanitize and no markdown to parse.
+const apiDialog = document.getElementById('api-dialog');
+document.getElementById('api-dialog-body').textContent = API_REFERENCE.trim();
+document.getElementById('menu-api').addEventListener('click', () => {
+  setAppMenuOpen(false);
+  apiDialog.showModal();
+});
+document.getElementById('api-dialog-close').addEventListener('click', () => apiDialog.close());
+
 // ---------- Chat settle announcer ----------
 // #chat-messages used to carry aria-live="polite" itself (index.html) —
 // vendored runtime/loop.js streams the assistant's reply into that div
