@@ -20,7 +20,12 @@
     <header>
       <div class="header-left">
         <h1><a class="home-link" href="../">stl-studio</a></h1>
-        <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
+        <div class="tools-wrap">
+          <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
+          <div class="tools-panel" id="tools-panel" data-collapsed="true">
+            <div class="tools-panel-inner" id="tools-panel-inner"></div>
+          </div>
+        </div>
       </div>
       <div class="settings-wrap">
         <button class="settings-btn" id="settings-btn" aria-label="Settings" aria-expanded="false" aria-controls="settings-popover" title="Settings">
@@ -53,10 +58,6 @@
         </div>
       </div>
     </header>
-
-    <div class="tools-panel" id="tools-panel" data-collapsed="true">
-      <div class="tools-panel-inner" id="tools-panel-inner"></div>
-    </div>
 
     <main>
       <section class="viewport-pane">

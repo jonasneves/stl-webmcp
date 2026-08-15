@@ -272,18 +272,30 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
 .editor-status.bad { color: var(--risk-high); background: var(--badge-red-bg); }
 .editor-status.busy { color: var(--text-muted); }
 
-/* ---------- tools-panel + chat-panel: float, don't reserve grid rows ---------- */
+/* ---------- tools-panel: anchor to its own trigger, not the viewport ----------
+ * Same wrapper pattern as .settings-wrap/.settings-popover (chat.css) — a
+ * position:relative wrapper around just the trigger button, with the panel
+ * absolutely positioned under IT, not at some hardcoded viewport offset.
+ * Anchoring here is also what keeps this panel clear of .edge-toggle-left:
+ * the trigger sits to the right of the "stl-studio" title, past where that
+ * button lives, so a panel anchored to the trigger never lands on top of it. */
+
+.tools-wrap { position: relative; }
 
 .tools-panel {
-  position: fixed;
-  top: 52px;
-  left: var(--space-lg);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
   z-index: 25;
   width: min(420px, 90vw);
   max-height: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
 .tools-panel[data-collapsed="false"] { max-height: min(60vh, 600px); overflow-y: auto; }
+
+/* ---------- chat-panel: float, don't reserve a grid column ---------- */
 
 .chat-panel { grid-area: unset; }
