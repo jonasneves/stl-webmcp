@@ -170,10 +170,12 @@ wireframeBtn.addEventListener('click', () => {
   material.wireframe = !material.wireframe;
   wireframeBtn.textContent = `Wireframe: ${material.wireframe ? 'on' : 'off'}`;
   wireframeBtn.classList.toggle('on', material.wireframe);
+  wireframeBtn.setAttribute('aria-pressed', String(material.wireframe));
 });
 gridBtn.addEventListener('click', () => {
   const on = !gridBtn.classList.contains('on');
   gridBtn.classList.toggle('on', on);
+  gridBtn.setAttribute('aria-pressed', String(on));
   if (grid) grid.visible = on;
 });
 resetBtn.addEventListener('click', () => {
@@ -642,8 +644,11 @@ mount({
 // Editor and chat are position:fixed overlays (cad.css) — toggling them
 // only slides a transform, it never resizes the canvas underneath. Each
 // button's icon names which side it controls (fixed); .on marks whether
-// that panel is currently open.
-function wirePanelToggle(toggleBtn, closeBtn, panelEl, storageKey) {
+// that panel is currently open. One control per action: the panels used to
+// also carry their own '✕' close button, redundant with the edge toggle
+// that already opens/closes the same panel — removed, so toggleBtn is the
+// only way in or out.
+function wirePanelToggle(toggleBtn, panelEl, storageKey) {
   const setOpen = (open) => {
     panelEl.dataset.open = String(open);
     toggleBtn.setAttribute('aria-expanded', String(open));
@@ -651,16 +656,35 @@ function wirePanelToggle(toggleBtn, closeBtn, panelEl, storageKey) {
     try { localStorage.setItem(storageKey, open ? '1' : '0'); } catch { /* private mode, ignore */ }
   };
   toggleBtn.addEventListener('click', () => setOpen(panelEl.dataset.open !== 'true'));
-  closeBtn?.addEventListener('click', () => setOpen(false));
   let stored = '1';
   try { stored = localStorage.getItem(storageKey) ?? '1'; } catch { /* private mode, ignore */ }
   setOpen(stored !== '0');
 }
 wirePanelToggle(
-  document.getElementById('panel-toggle-left'), document.getElementById('editor-close'),
+  document.getElementById('panel-toggle-left'),
   document.getElementById('editor-pane'), 'stl-studio-editor-open',
 );
 wirePanelToggle(
-  document.getElementById('panel-toggle-right'), document.getElementById('chat-close'),
+  document.getElementById('panel-toggle-right'),
   document.getElementById('chat-panel-el'), 'stl-studio-chat-open',
 );
+
+// ---------- Chat settle announcer ----------
+// #chat-messages used to carry aria-live="polite" itself (index.html) —
+// vendored runtime/loop.js streams the assistant's reply into that div
+// token-by-token as markdown renders, so a live region ON it announced
+// every intermediate delta: a screen reader user got a word-by-word
+// narration instead of a normal reply. Announce only that the exchange
+// settled, via a separate, visually-hidden status region driven by a
+// debounced MutationObserver — no message text mirrored, just the signal.
+const chatMessagesEl = document.getElementById('chat-messages');
+const chatLiveEl = document.createElement('div');
+chatLiveEl.className = 'sr-only';
+chatLiveEl.setAttribute('role', 'status');
+chatLiveEl.setAttribute('aria-live', 'polite');
+document.body.appendChild(chatLiveEl);
+let chatSettleTimer = null;
+new MutationObserver(() => {
+  clearTimeout(chatSettleTimer);
+  chatSettleTimer = setTimeout(() => { chatLiveEl.textContent = 'Assistant replied.'; }, 800);
+}).observe(chatMessagesEl, { childList: true, subtree: true, characterData: true });

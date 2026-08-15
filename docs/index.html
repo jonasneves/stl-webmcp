@@ -79,8 +79,8 @@
     <main>
       <section class="viewport-pane">
         <div class="viewport-toolbar">
-          <button id="vp-wireframe">Wireframe: off</button>
-          <button id="vp-grid" class="on">Grid</button>
+          <button id="vp-wireframe" aria-pressed="false">Wireframe: off</button>
+          <button id="vp-grid" class="on" aria-pressed="true">Grid</button>
           <button id="vp-reset" disabled>Reset view</button>
           <span class="vp-sep"></span>
           <button id="vp-open" title="Load an STL — usable as imported() in scripts if it's a valid manifold, view-only otherwise">Import&#8230;</button>
@@ -102,7 +102,6 @@
         <option value="">History&#8230;</option>
       </select>
       <button id="editor-run" class="btn-run">Run <kbd>&#8984;&#9166;</kbd></button>
-      <button id="editor-close" class="panel-close" aria-label="Close script panel" title="Close">&#10005;</button>
     </div>
     <textarea id="editor" class="editor-text" spellcheck="false" autocomplete="off" autocapitalize="off"
       aria-label="CSG script"></textarea>
@@ -114,9 +113,8 @@
       <span class="chat-header-title">AI Chat</span>
       <span class="chat-model-label" id="chat-model-label">Claude</span>
       <button class="btn btn-sm" id="chat-reset" aria-label="Clear chat">Clear</button>
-      <button id="chat-close" class="panel-close" aria-label="Close chat panel" title="Close">&#10005;</button>
     </div>
-    <div class="chat-messages" id="chat-messages" aria-live="polite" aria-label="Chat messages"></div>
+    <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
       <div class="chat-input-wrap">
         <textarea class="chat-input" id="chat-input" placeholder="Describe a part&#8230;" rows="1" aria-label="Chat message"></textarea>
