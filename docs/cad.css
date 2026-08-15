@@ -169,9 +169,58 @@ html[data-theme="dark"] header {
   text-align: right;
   line-height: 1.6;
   pointer-events: none;
+  transition: right 220ms var(--ease);
 }
 .vp-report .vp-report-bad { color: var(--risk-high, #ef4444); }
 .vp-report .vp-report-dim { color: #9aa3bb; }
+
+/* The chat panel (.chat-panel, open by default) is a fixed right-hand
+ * overlay that sits on top of this card at its default right:10px — shift
+ * clear of it whenever the panel is open so manifold status/tri count/dims
+ * stay visible. Narrow viewports are handled separately below: the panel
+ * goes full-width there and there's no clear spot to shift to, so the card
+ * deliberately stays put (and covered) rather than jumping to a
+ * mid-screen position that would itself get overlapped by panel content. */
+body:has(.chat-panel[data-open="true"]) .vp-report {
+  right: calc(min(420px, 92vw) + 10px);
+}
+
+/* ---------- Drop-to-import indicator ----------
+ * main.js already counts window dragenter/dragleave depth (to swallow the
+ * dragleave noise nested elements fire) but had nothing showing for it —
+ * dragging a file over the page gave zero visual feedback. Full-viewport
+ * veil + inset dashed border, same glass recipe as everywhere else.
+ * pointer-events:none throughout so it never steals the drop event it
+ * exists to announce; main.js only ever toggles the [hidden] attribute. */
+.drop-indicator {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(6px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(6px) var(--glass-sat);
+  pointer-events: none;
+}
+.drop-indicator::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+}
+.drop-indicator-label {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: #eceef3;
+  background: var(--glass-veil-dense);
+  padding: 10px 20px;
+  border: var(--glass-hairline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--glass-rim);
+}
 
 /* ---------- Dark-glass token freeze ----------
  * The canvas behind every floating surface is always #14161c, in both
@@ -254,6 +303,11 @@ html[data-theme="dark"] header {
 
 @media (max-width: 900px) {
   .editor-pane, .chat-panel { width: 100vw; }
+  /* Panel is full-width here, so there's no "clear" position to shift the
+   * report card to — deliberately leave it at right:10px (covered while
+   * the chat panel is open) rather than the desktop calc() above, which
+   * would base the offset on a width the panel no longer actually has. */
+  body:has(.chat-panel[data-open="true"]) .vp-report { right: 10px; }
 }
 
 /* ---------- Edge toggle buttons ----------
@@ -441,7 +495,9 @@ html[data-theme="dark"] header {
   }
   .viewport-toolbar,
   .vp-report,
-  .edge-toggle {
+  .edge-toggle,
+  .drop-indicator,
+  .drop-indicator-label {
     background: rgba(13, 15, 18, .94);
   }
   .viewport-toolbar button { background: rgba(40, 44, 54, .9); }
@@ -460,7 +516,9 @@ html[data-theme="dark"] header {
   }
   .viewport-toolbar,
   .vp-report,
-  .edge-toggle {
+  .edge-toggle,
+  .drop-indicator,
+  .drop-indicator-label {
     background: rgba(13, 15, 18, .94);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

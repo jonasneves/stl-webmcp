@@ -33,6 +33,7 @@ const fileInput = document.getElementById('vp-file');
 const exportBtn = document.getElementById('vp-export');
 const emptyEl = document.getElementById('vp-empty');
 const reportEl = document.getElementById('vp-report');
+const dropIndicatorEl = document.getElementById('drop-indicator');
 const editorEl = document.getElementById('editor');
 const runBtn = document.getElementById('editor-run');
 const statusEl = document.getElementById('editor-status');
@@ -80,7 +81,10 @@ function resizeRenderer() {
   camera.updateProjectionMatrix();
   renderer.setSize(clientWidth, clientHeight, false);
 }
-window.addEventListener('resize', resizeRenderer);
+// canvas.parentElement (.viewport-pane) is `position:absolute; inset:0`
+// inside `main`, which fills the full body (cad.css) — a window resize
+// changes its layout box just like any other resize, so the observer alone
+// covers it; no separate window 'resize' listener needed.
 new ResizeObserver(resizeRenderer).observe(canvas.parentElement);
 resizeRenderer();
 
@@ -256,13 +260,20 @@ function handleReferenceFile(file) {
 }
 openBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => handleReferenceFile(fileInput.files[0]));
+// dragDepth counts nested dragenter/dragleave pairs — a dragleave fires for
+// every child element the pointer crosses, not just when it truly exits the
+// window, so only hide the indicator once depth returns to 0.
 let dragDepth = 0;
-window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; });
+window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; dropIndicatorEl.hidden = false; });
 window.addEventListener('dragover', e => e.preventDefault());
-window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); });
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) dropIndicatorEl.hidden = true;
+});
 window.addEventListener('drop', e => {
   e.preventDefault();
   dragDepth = 0;
+  dropIndicatorEl.hidden = true;
   handleReferenceFile(e.dataTransfer.files[0]);
 });
 
