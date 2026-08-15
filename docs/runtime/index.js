@@ -42,6 +42,12 @@ import { dismissToast } from './ui.js';
  * @param {(label:string)=>string} [cfg.promptFor]  Expand a quick-action label to the full prompt
  * @param {()=>string[]} [cfg.getFollowupSuggestions]  Chips shown after a turn completes
  * @param {string} [cfg.defaultModel]        Override for default model select value
+ * @param {string[]} [cfg.settingSources]    Passed to termd verbatim (SettingSource[] —
+ *                                           'user'|'project'|'local'). Omit for CLI-parity
+ *                                           default (everything loads); [] for the SDK's own
+ *                                           isolation mode — no ~/.claude/settings.json, no
+ *                                           CLAUDE.md, no operator context bleeding into an
+ *                                           embedded, page-scoped assistant.
  */
 export function mount(cfg) {
   initChatRefs();
@@ -128,6 +134,7 @@ export function mount(cfg) {
       getSystemPrompt,
       getDividerContext,
       onComplete: renderFollowups,
+      settingSources: cfg.settingSources,
     });
 
     abort = null;

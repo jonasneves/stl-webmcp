@@ -80,7 +80,7 @@ async function executeTool(name, input, pendingEl, getDividerContext) {
 // back. executeTool is reused unchanged, which is the point — the trust gate
 // and the tool cards behave the same whether the loop runs here or there.
 
-async function runConversationTermd(messages, { signal, getSystemPrompt, getDividerContext, onComplete }) {
+async function runConversationTermd(messages, { signal, getSystemPrompt, getDividerContext, onComplete, settingSources }) {
   const last = [...messages].reverse().find(m => m.role === 'user');
   const prompt = typeof last?.content === 'string' ? last.content : '';
   let body;
@@ -97,6 +97,7 @@ async function runConversationTermd(messages, { signal, getSystemPrompt, getDivi
         input_schema: t.schema || { type: 'object', properties: {} },
       })),
       signal,
+      settingSources,
     });
   } catch (err) {
     hideSpinner();

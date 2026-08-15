@@ -16,9 +16,15 @@ static site (GitHub Pages, Cloudflare Pages, etc.).
   `termd`-driven, no API key in the page) that writes the script, reads back the render
   report (manifold check, triangle count, bbox), and can *look at* the rendered shape via
   `capture_view` before calling it done. Tools: `write_script`, `get_render_report`,
-  `read_script`, `capture_view`, `export_stl`, `reset_script`.
-- **Reference viewer** — drag-and-drop or file-picker load of an existing `.stl` for
-  comparison, bypassing the CSG pipeline entirely (view-only).
+  `read_script`, `capture_view`, `export_stl`, `reset_script`. Runs under termd's
+  `settingSources: []` isolation — it only ever sees this app's own system prompt, never
+  the operator's global CLAUDE.md/output-style/hooks (needs a termd build that has the
+  `settingSources` knob; see `../termd`).
+- **Import** — drag-and-drop or file-picker load of an existing `.stl`. Always shown for
+  viewing; if it's (or welds into) a valid manifold, it's also usable in scripts via
+  `imported()`, composable with primitives via the same union/subtract/intersect/transform
+  API. Scanned/sculpted meshes often aren't watertight — those stay view-only, and the
+  tool says why rather than pretending it worked.
 - The script editor and chat are floating overlays, not a fixed layout split — the
   viewport always renders at full size, and each panel toggles independently (edge
   buttons, state persisted per-browser).

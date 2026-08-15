@@ -14,18 +14,39 @@
 //     stride = numProp), triVerts: Uint32Array (3 indices/tri), numProp }.
 //   - .status() returns 'NoError' when the result is a valid manifold —
 //     this is the watertightness check the whole kernel exists to expose.
+//   - Import (the reverse of getMesh): `new Manifold(new Mesh({numProp,
+//     vertProperties, triVerts}))` or the equivalent `Manifold.ofMesh(mesh)`.
+//     Both THROW SYNCHRONOUSLY if the input isn't an oriented 2-manifold —
+//     this is NOT a build-then-check-.status() flow like booleans are.
+//     A raw STL has no shared vertices between adjacent triangles (the
+//     format doesn't store connectivity), so it reads as "all boundary
+//     edges" / non-manifold to this constructor regardless of whether the
+//     real-world shape is watertight — the caller MUST weld coincident
+//     vertices into a real indexed mesh first (main.js does this with
+//     three's mergeVertices before ever sending mesh data here).
 
 const MANIFOLD_CDN = 'https://cdn.jsdelivr.net/npm/manifold-3d@3.5.1/manifold.js';
 
 let ManifoldCtor = null;
+let MeshCtor = null;
 
 export async function loadManifold() {
-  if (ManifoldCtor) return ManifoldCtor;
+  if (ManifoldCtor) return { Manifold: ManifoldCtor, Mesh: MeshCtor };
   const { default: Module } = await import(MANIFOLD_CDN);
   const wasm = await Module();
   wasm.setup();
   ManifoldCtor = wasm.Manifold;
-  return ManifoldCtor;
+  MeshCtor = wasm.Mesh;
+  return { Manifold: ManifoldCtor, Mesh: MeshCtor };
+}
+
+// Build a Manifold from an already-welded (indexed) mesh. Throws — that's
+// the SDK's own contract for this constructor, not a bug to swallow; the
+// caller (worker.js) decides how to report it (still show the mesh for
+// visual reference even when it can't be a CSG operand).
+export function importMesh(Manifold, Mesh, { vertProperties, triVerts, numProp = 3 }) {
+  const mesh = new Mesh({ numProp, vertProperties, triVerts });
+  return new Manifold(mesh);
 }
 
 function vec3(v, fallback = 0) {
@@ -114,6 +135,13 @@ Primitives (return a shape):
   cube({ size: number|[x,y,z] = 1, center = false })
   cylinder({ height = 1, radius = 1, radiusTop = radius, segments = 48, center = false })
   sphere({ radius = 1, segments = 48 })
+
+Imported reference (when the human has used "Import…" to load an STL):
+  imported()   // the imported mesh AS A SHAPE — usable exactly like a primitive, in
+               // booleans/transforms. Throws if nothing's been imported, or if the
+               // imported file wasn't a valid manifold (common for scanned/sculpted
+               // meshes) — check get_render_report/the system prompt before relying on
+               // it. Large imports make booleans against them slower; that's expected.
 
 Booleans (each arg is a shape; extras allowed):
   union(...shapes)         // combine

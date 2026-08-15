@@ -82,9 +82,16 @@ export async function checkTermd() {
 /* Unlike a model API, termd owns the conversation, the history and the agent
  * loop; we hand it a prompt plus the page's tool definitions and answer the
  * tool calls it streams back. */
-export async function streamTermdAgent({ prompt, tools, cwd, model, signal }) {
+export async function streamTermdAgent({ prompt, tools, cwd, model, signal, settingSources }) {
   // 'default' lets the daemon's own TERMD_MODEL decide.
-  const body = { prompt, tools, cwd, maxTurns: 24, ...(model && model !== 'default' ? { model } : {}) };
+  // settingSources is omitted unless the caller named one — `[]` (SDK isolation: no
+  // ~/.claude/settings.json, no CLAUDE.md, no project/local settings) is a real,
+  // caller-named value and must reach termd as one, not collapse to "unset".
+  const body = {
+    prompt, tools, cwd, maxTurns: 24,
+    ...(model && model !== 'default' ? { model } : {}),
+    ...(settingSources !== undefined ? { settingSources } : {}),
+  };
   if (getTermdPort()) {
     // Re-expose the bridge's chunks as a ReadableStream so the SSE parser does
     // not care which transport delivered them.
