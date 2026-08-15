@@ -186,11 +186,15 @@ function handleReferenceFile(file) {
     geometry.computeVertexNormals();
     const { size } = applyGeometry(geometry);
     state.mode = 'reference';
+    state.referenceInfo = {
+      filename: file.name,
+      numTri: geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3,
+      size: { x: size.x, y: size.y, z: size.z },
+    };
     exportBtn.disabled = true;
-    const count = geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
     reportEl.innerHTML =
       `<div class="vp-report-dim">reference: ${escapeHtml(file.name)}</div>` +
-      `<div class="vp-report-dim">${count.toLocaleString()} tri · ${fmt(size.x)}×${fmt(size.y)}×${fmt(size.z)}</div>`;
+      `<div class="vp-report-dim">${state.referenceInfo.numTri.toLocaleString()} tri · ${fmt(size.x)}×${fmt(size.y)}×${fmt(size.z)}</div>`;
     reportEl.hidden = false;
     setStatus(`Reference file loaded — not editable. Run a script to author a new shape.`, '');
   };
@@ -253,7 +257,11 @@ const state = {
   busy: false,
   history: [],
   mode: 'authored',
+  referenceInfo: null, // {filename, numTri, size} — set only in 'reference' mode; see handleReferenceFile
 };
+function formatReferenceLine(r) {
+  return `reference "${r.filename}" · ${r.numTri.toLocaleString()} tri · ${fmt(r.size.x)}×${fmt(r.size.y)}×${fmt(r.size.z)}`;
+}
 
 function fmt(n, d = 2) { return Number(n).toFixed(d); }
 function escapeHtml(s) {
@@ -326,6 +334,7 @@ async function runScript(code, { record = true } = {}) {
     state.lastReport = msg.report;
     state.lastError = null;
     state.mode = 'authored';
+    state.referenceInfo = null;
     applyManifoldMesh(msg.mesh);
     updateReportPanel(msg.report);
     exportBtn.disabled = false;
@@ -390,13 +399,21 @@ State whatever unit you're treating the numbers as (usually mm) so the human isn
 function getSystemPrompt() {
   const lines = [SYSTEM_PROMPT_BASE, '', 'Current page state:'];
   if (state.busy) lines.push('- A script is currently running.');
-  if (state.lastError) lines.push(`- Last run FAILED: ${state.lastError}`);
-  else if (state.lastReport) lines.push(`- Current shape: ${formatReportLine(state.lastReport)}`);
-  else lines.push('- No shape rendered yet.');
-  if (state.mode === 'reference') lines.push('- Viewport is currently showing a reference file the human opened, not the authored shape.');
+  if (state.mode === 'reference' && state.referenceInfo) {
+    lines.push(`- Viewport shows a REFERENCE file the human opened for comparison, not something you authored: ${formatReferenceLine(state.referenceInfo)}`);
+    lines.push('- You did not write this and have no script/geometry data for it — only capture_view (a picture) and this line. Don\'t guess at features you can\'t see; say what you can tell from the image and ask if you need more.');
+    lines.push('- The last CSG script you authored is still saved and will reappear once you write_script again or the human clicks Run.');
+  } else if (state.lastError) {
+    lines.push(`- Last run FAILED: ${state.lastError}`);
+  } else if (state.lastReport) {
+    lines.push(`- Current shape: ${formatReportLine(state.lastReport)}`);
+  } else {
+    lines.push('- No shape rendered yet.');
+  }
   return lines.join('\n');
 }
 function getDividerContext() {
+  if (state.mode === 'reference' && state.referenceInfo) return [formatReferenceLine(state.referenceInfo)];
   return state.lastReport ? [formatReportLine(state.lastReport)] : [];
 }
 
@@ -421,13 +438,16 @@ const TOOL_DEFS = [
   {
     name: 'get_render_report',
     title: 'Get render report',
-    description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume.',
+    description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume. If a reference file is open instead (view-only, not authored by you), returns its filename/triangle count/dimensions — this is your only way to learn what it is; you cannot read its geometry data or script, only what capture_view shows you and what this reports.',
     readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
     schema: { type: 'object', properties: {} },
     exec: async () => {
+      if (state.mode === 'reference' && state.referenceInfo) {
+        return { summary: formatReferenceLine(state.referenceInfo), mode: 'reference', ...state.referenceInfo };
+      }
       if (state.lastError) return { error: state.lastError };
       if (!state.lastReport) return { summary: 'No shape yet.' };
-      return { summary: formatReportLine(state.lastReport), ...state.lastReport };
+      return { summary: formatReportLine(state.lastReport), mode: 'authored', ...state.lastReport };
     },
   },
   {
@@ -441,7 +461,7 @@ const TOOL_DEFS = [
   {
     name: 'capture_view',
     title: 'Capture viewport image',
-    description: 'Render the current shape from a named camera angle and return it as an image, so you can visually check the result instead of reasoning about numbers alone.',
+    description: 'Render the current shape (or reference file, if one is open) from a named camera angle and return it as an image, so you can visually check the result instead of reasoning about numbers alone.',
     readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
     schema: {
       type: 'object',
@@ -451,7 +471,8 @@ const TOOL_DEFS = [
       let base64;
       try { base64 = captureView(preset); }
       catch (err) { return { error: err.message }; }
-      const dims = state.lastReport ? formatReportLine(state.lastReport) : '';
+      const dims = state.mode === 'reference' && state.referenceInfo ? formatReferenceLine(state.referenceInfo)
+        : state.lastReport ? formatReportLine(state.lastReport) : '';
       return [
         { type: 'text', text: `${preset} view${dims ? ' — ' + dims : ''}` },
         { type: 'image', data: base64, mimeType: 'image/png' },
@@ -480,7 +501,8 @@ const TOOL_DEFS = [
       editorEl.value = DEFAULT_SCRIPT;
       state.code = DEFAULT_SCRIPT;
       clearModel();
-      state.lastMesh = null; state.lastReport = null; state.lastError = null; state.mode = 'authored';
+      state.lastMesh = null; state.lastReport = null; state.lastError = null;
+      state.mode = 'authored'; state.referenceInfo = null;
       emptyEl.hidden = false; resetBtn.disabled = true; exportBtn.disabled = true;
       reportEl.hidden = true; setStatus('', '');
       return { summary: 'Script reset.', displayed: true };
