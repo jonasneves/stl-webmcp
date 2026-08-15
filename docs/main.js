@@ -56,9 +56,18 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoftShadowMap is deprecated as of three@0.183
 
+// Dirty-flag render gate: every place that can make the canvas look
+// different — camera motion, new geometry, a material/visibility toggle
+// that doesn't emit its own event — must call requestRender(). tick() below
+// is the only place needsRender gets cleared; a missed call site here means
+// a permanently stale canvas on that path.
+let needsRender = true;
+function requestRender() { needsRender = true; }
+
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+controls.addEventListener('change', requestRender); // user drag/zoom/pan
 
 const hemi = new THREE.HemisphereLight(0xdfe6f5, 0x14161c, 1.1);
 scene.add(hemi);
@@ -80,6 +89,7 @@ function resizeRenderer() {
   camera.aspect = clientWidth / Math.max(clientHeight, 1);
   camera.updateProjectionMatrix();
   renderer.setSize(clientWidth, clientHeight, false);
+  requestRender();
 }
 // canvas.parentElement (.viewport-pane) is `position:absolute; inset:0`
 // inside `main`, which fills the full body (cad.css) — a window resize
@@ -92,6 +102,7 @@ function clearModel() {
   if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh = null; }
   if (grid) { scene.remove(grid); grid = null; }
   if (ground) { scene.remove(ground); ground = null; }
+  requestRender(); // reset_script calls this standalone (no applyGeometry after) — must repaint the now-empty scene itself
 }
 
 function frameCamera(radius, center) {
@@ -123,7 +134,11 @@ function applyGeometry(geometry) {
   // center ~[128,128,4.5]); anything built/exported near-centered (most
   // center:true CSG primitives, most URDF parts) has center.y≈0 and the
   // double-subtraction was invisible.
-  const groundY = box.min.y - center.y;
+  // An empty result (0 triangles — e.g. intersect() of non-overlapping
+  // shapes) still reports NoError, but Box3's min/max default to
+  // +/-Infinity when empty (unlike getSize/getCenter above, which guard
+  // internally), so box.min.y here would otherwise be Infinity.
+  const groundY = box.isEmpty() ? 0 : box.min.y - center.y;
   geometry.translate(-center.x, -center.y, -center.z);
 
   mesh = new THREE.Mesh(geometry, material);
@@ -148,6 +163,7 @@ function applyGeometry(geometry) {
   frameCamera(radius, new THREE.Vector3(0, 0, 0));
   emptyEl.hidden = true;
   resetBtn.disabled = false;
+  requestRender();
   return { size, box };
 }
 
@@ -161,8 +177,9 @@ function captureView(preset = 'iso') {
   camera.updateProjectionMatrix();
   controls.target.set(0, 0, 0);
   controls.update();
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); // this render is for the returned PNG, not the tick loop
   const dataUrl = renderer.domElement.toDataURL('image/png');
+  requestRender(); // camera moved here outside the loop — make sure it repaints on screen too
   return dataUrl.slice(dataUrl.indexOf(',') + 1);
 }
 
@@ -171,21 +188,28 @@ wireframeBtn.addEventListener('click', () => {
   wireframeBtn.textContent = `Wireframe: ${material.wireframe ? 'on' : 'off'}`;
   wireframeBtn.classList.toggle('on', material.wireframe);
   wireframeBtn.setAttribute('aria-pressed', String(material.wireframe));
+  requestRender(); // material.wireframe flips silently — no three.js event for it
 });
 gridBtn.addEventListener('click', () => {
   const on = !gridBtn.classList.contains('on');
   gridBtn.classList.toggle('on', on);
   gridBtn.setAttribute('aria-pressed', String(on));
   if (grid) grid.visible = on;
+  requestRender(); // grid.visible flips silently — no three.js event for it
 });
 resetBtn.addEventListener('click', () => {
   if (!mesh) return;
   frameCamera(lastRadius, new THREE.Vector3(0, 0, 0));
+  requestRender();
 });
 
 (function tick() {
-  controls.update();
-  renderer.render(scene, camera);
+  const moved = controls.update(); // true when damping is still settling the camera
+  if (moved) needsRender = true;
+  if (needsRender) {
+    renderer.render(scene, camera);
+    needsRender = false;
+  }
   requestAnimationFrame(tick);
 })();
 
@@ -300,18 +324,29 @@ class CadWorker {
     this.pending.delete(msg.requestId);
     msg.ok ? p.resolve(msg) : p.reject(new Error(msg.error));
   }
-  _failAll(message) {
-    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error(message)); }
+  // Shared by worker onerror (every pending request fails alike) and
+  // _call's timeout (one culprit request plus N collateral ones sharing its
+  // worker, which each need a different message). messageFor may be a
+  // string for the uniform case or (requestId) => string for the split one.
+  _failAll(messageFor) {
+    const toMessage = typeof messageFor === 'function' ? messageFor : () => messageFor;
+    for (const [id, p] of this.pending) { clearTimeout(p.timer); p.reject(new Error(toMessage(id))); }
     this.pending.clear();
   }
   _call(type, payload, timeoutMs, transfer) {
     const requestId = ++this.reqId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(requestId);
+        // A timeout means the WORKER is stuck (infinite loop, pathological
+        // boolean) — respawning it orphans every other pending request on
+        // this worker too, not just this one, so fail the whole map before
+        // terminating; otherwise their still-scheduled timers would each
+        // later fire and terminate the NEW healthy worker in turn.
+        this._failAll((id) => id === requestId
+          ? `${type} timed out after ${timeoutMs}ms (possible infinite loop) — worker restarted.`
+          : 'worker restarted after another request timed out.');
         this.worker.terminate();
         this._spawn();
-        reject(new Error(`${type} timed out after ${timeoutMs}ms (possible infinite loop) — worker restarted.`));
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.worker.postMessage({ type, requestId, ...payload }, transfer || []);
@@ -349,15 +384,24 @@ function setStatus(text, kind) {
   statusEl.textContent = text;
   statusEl.className = 'editor-status' + (kind ? ` ${kind}` : '');
 }
+// A 0-triangle result reports manifold:true (NoError) — "empty" is its own
+// not-ok state (almost always a mistake, per the subtract-no-op warning in
+// kernel.js's API_REFERENCE), so callers gate on this instead of `manifold`
+// alone.
+function reportOk(r) { return r.manifold && !r.empty; }
 function formatReportLine(r) {
+  if (r.empty) return '⚠ empty result · 0 tri — shapes may not overlap';
   const [sx, sy, sz] = r.bbox.size;
   const flag = r.manifold ? '✓ manifold' : `✗ ${r.status}`;
   return `${flag} · ${r.numTri.toLocaleString()} tri · ${fmt(sx)}×${fmt(sy)}×${fmt(sz)}`;
 }
 function updateReportPanel(r) {
   const [sx, sy, sz] = r.bbox.size;
+  const flagLine = r.empty
+    ? `<div class="vp-report-bad">⚠ empty result — shapes may not overlap</div>`
+    : `<div class="${r.manifold ? '' : 'vp-report-bad'}">${r.manifold ? '✓ manifold' : '✗ ' + escapeHtml(r.status)}</div>`;
   reportEl.innerHTML =
-    `<div class="${r.manifold ? '' : 'vp-report-bad'}">${r.manifold ? '✓ manifold' : '✗ ' + escapeHtml(r.status)}</div>` +
+    flagLine +
     `<div class="vp-report-dim">${r.numTri.toLocaleString()} triangles</div>` +
     `<div class="vp-report-dim">${fmt(sx)} × ${fmt(sy)} × ${fmt(sz)}</div>`;
   reportEl.hidden = false;
@@ -416,8 +460,11 @@ async function runScript(code, { record = true } = {}) {
     // alone here: that's the whole point of imported(), staying usable across runs.
     applyManifoldMesh(msg.mesh);
     updateReportPanel(msg.report);
-    exportBtn.disabled = false;
-    setStatus(formatReportLine(msg.report), msg.report.manifold ? 'ok' : 'bad');
+    // A non-manifold (or NonFiniteVertex) result can still serialize to STL
+    // bytes containing NaN/Infinity, and an empty (0-tri) one has nothing
+    // to write at all — Export stays off until reportOk() says otherwise.
+    exportBtn.disabled = !reportOk(msg.report);
+    setStatus(formatReportLine(msg.report), reportOk(msg.report) ? 'ok' : 'bad');
     if (record) pushHistory(code, true);
     return { ok: true, report: msg.report };
   } catch (err) {
@@ -453,6 +500,14 @@ function doExport(filename) {
 }
 exportBtn.addEventListener('click', () => {
   if (!state.lastMesh || state.mode !== 'authored') return;
+  if (!state.lastReport?.manifold) {
+    setStatus(`Not manifold (${state.lastReport?.status ?? 'unknown'}) — fix the script before exporting.`, 'bad');
+    return;
+  }
+  if (state.lastReport.empty) {
+    setStatus('Nothing to export — result has 0 triangles.', 'bad');
+    return;
+  }
   doExport('part');
 });
 
@@ -598,6 +653,8 @@ const TOOL_DEFS = [
     schema: { type: 'object', properties: { filename: { type: 'string', description: 'Base filename; .stl is added if missing.' } } },
     exec: async ({ filename } = {}) => {
       if (state.mode !== 'authored' || !state.lastMesh) return { error: 'No authored shape to export yet — run a script first.' };
+      if (!state.lastReport?.manifold) return { error: `Not manifold (${state.lastReport?.status ?? 'unknown'}) — fix the script before exporting.` };
+      if (state.lastReport.empty) return { error: 'Nothing to export — result has 0 triangles.' };
       const r = doExport(filename);
       return { summary: `Exported ${r.filename} (${r.bytes.toLocaleString()} bytes)`, displayed: true };
     },

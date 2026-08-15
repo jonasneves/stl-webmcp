@@ -27,17 +27,23 @@
 
 const MANIFOLD_CDN = 'https://cdn.jsdelivr.net/npm/manifold-3d@3.5.1/manifold.js';
 
-let ManifoldCtor = null;
-let MeshCtor = null;
+// Cache the in-flight PROMISE, not the resolved value: two messages hitting
+// a cold worker both call loadManifold() before either has a result to
+// check, so a check-then-act on the resolved value lets both call Module()
+// and instantiate two separate WASM modules (last writer wins, orphaning
+// anything already bound to the loser, e.g. worker.js's importedManifold).
+// Every caller sharing this one promise makes cold-start instantiation
+// happen exactly once no matter how many messages arrive before it settles.
+let loadPromise = null;
 
-export async function loadManifold() {
-  if (ManifoldCtor) return { Manifold: ManifoldCtor, Mesh: MeshCtor };
-  const { default: Module } = await import(MANIFOLD_CDN);
-  const wasm = await Module();
-  wasm.setup();
-  ManifoldCtor = wasm.Manifold;
-  MeshCtor = wasm.Mesh;
-  return { Manifold: ManifoldCtor, Mesh: MeshCtor };
+export function loadManifold() {
+  loadPromise ??= (async () => {
+    const { default: Module } = await import(MANIFOLD_CDN);
+    const wasm = await Module();
+    wasm.setup();
+    return { Manifold: wasm.Manifold, Mesh: wasm.Mesh };
+  })();
+  return loadPromise;
 }
 
 // Build a Manifold from an already-welded (indexed) mesh. Throws — that's
@@ -104,15 +110,23 @@ const OK_STATUS = 'NoError';
 export function reportFor(shape) {
   const status = shape.status();
   const bbox = shape.boundingBox();
-  const size = [
+  const numTri = shape.numTri();
+  // A 0-triangle result (e.g. intersect() of non-overlapping shapes) still
+  // reports NoError, but manifold-3d's bbox on an empty shape is +/-Infinity
+  // on every axis — the max-min subtraction below would otherwise produce
+  // -Infinity dims. `empty` lets callers treat "no geometry" as its own
+  // reportable state rather than a manifold result with nonsense size.
+  const empty = numTri === 0;
+  const size = empty ? [0, 0, 0] : [
     bbox.max[0] - bbox.min[0],
     bbox.max[1] - bbox.min[1],
     bbox.max[2] - bbox.min[2],
   ];
   return {
     manifold: status === OK_STATUS,
+    empty,
     status,
-    numTri: shape.numTri(),
+    numTri,
     numVert: shape.numVert(),
     genus: shape.genus(),
     volume: shape.volume(),

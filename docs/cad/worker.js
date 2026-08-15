@@ -25,6 +25,10 @@ let Mesh = null;
 // .delete()'d the first time a script that calls imported() finishes.
 let importedManifold = null;
 
+// Safe to call concurrently even though this itself is check-then-act on
+// Manifold: loadManifold() caches its own in-flight promise, so N calls that
+// all see Manifold===null before the first resolves still share one WASM
+// instantiation and end up assigning the same values here.
 async function ensureReady() {
   if (Manifold) return;
   ({ Manifold, Mesh } = await loadManifold());
