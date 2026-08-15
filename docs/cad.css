@@ -1,14 +1,16 @@
 /* stl-studio layout: the canvas always fills every pixel of the window —
- * the header is a floating glass overlay (position:fixed), not a grid row
- * that reserves space, and the script editor / chat panels are floating
- * overlays docked left/right beneath it, each independently toggleable, so
- * opening/closing them never reflows the viewport. Pairs with app.css
- * (tokens, header, settings, dialogs) and chat.css (chat surface +
- * component styles) — both loaded unmodified from webmcp. This file
- * overrides their GRID layout (header/tools/source/work/chat rows) with a
- * single full-bleed content area, takes the header out of grid flow
- * entirely, and repositions .tools-panel / .chat-panel / .settings-popover
- * as glass overlays to match — inspired by termd's frosted-glass chrome
+ * there is no header bar at all. Every control is a small glass pill,
+ * fixed-positioned directly over the canvas in one of two HUD clusters
+ * pinned to the top corners (.hud-left / .hud-right); the script editor /
+ * chat panels are floating overlays docked left/right, each independently
+ * toggleable, so opening/closing them never reflows the viewport. Pairs
+ * with app.css (tokens, header, settings, dialogs) and chat.css (chat
+ * surface + component styles) — both loaded unmodified from webmcp. This
+ * file overrides their GRID layout (header/tools/source/work/chat rows)
+ * with a single full-bleed content area — app.css/chat.css's `header`
+ * selectors simply no longer match anything — and repositions
+ * .tools-panel / .chat-panel / .settings-popover as glass overlays to
+ * match — inspired by termd's frosted-glass chrome
  * (../termd/web/styles.css), since the WebGL scene behind everything is
  * always dark regardless of theme.
  *
@@ -42,35 +44,41 @@ body {
 }
 main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
 
-/* ---------- Header: floating glass overlay, not a grid row ----------
- * position:fixed removes it from grid flow entirely (out-of-flow children
- * aren't grid items), so `main` gets the full 100dvh automatically — no
- * header-height math needed anywhere else. Both theme branches already
- * render header text as light-on-dark (app.css hardcodes white-ish text
- * for the light theme's header, since it was always a dark bar) so
- * committing the background itself to dark glass in both themes needs no
- * text/token overrides here — see the dark-glass freeze further down for
- * the panels where that isn't already true. */
-header {
+/* ---------- HUD corner clusters ----------
+ * No header bar: the two toggle buttons, the wordmark, the tools dropdown
+ * trigger and the settings gear are each their own small glass pill,
+ * floating directly over the canvas. .hud is a plain fixed-position flex
+ * row — it carries no background of its own, only layout — so the row
+ * reads as loose chrome rather than a bar; each pill inside gets its own
+ * glass treatment below. Mirrors the .edge-toggle recipe already used for
+ * the two panel toggles. z-index 30 keeps every pill above the panels
+ * (z-index 20) and the tools/settings dropdowns anchored to them.
+ *
+ * env(safe-area-inset-*) padding keeps the pills clear of a device notch
+ * in landscape (iPhone-class devices); the fallback 0px makes this a
+ * no-op everywhere else. */
+.hud {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: calc(12px + env(safe-area-inset-top, 0px));
   z-index: 30;
-  background: var(--glass-veil);
-  backdrop-filter: blur(20px) var(--glass-sat);
-  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
-  border-bottom: var(--glass-hairline);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05), 0 8px 24px rgba(0, 0, 0, .35);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-/* Same values, repeated at matching specificity: app.css's own
- * `html[data-theme="dark"] header` rule (0,1,2) outranks a bare `header`
- * selector, so the override needs a same-shape selector to win the
- * cascade rather than relying on source order alone. */
-html[data-theme="dark"] header {
-  background: var(--glass-veil);
-  border-bottom: var(--glass-hairline);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05), 0 8px 24px rgba(0, 0, 0, .35);
+.hud-left { left: calc(12px + env(safe-area-inset-left, 0px)); }
+.hud-right { right: calc(12px + env(safe-area-inset-right, 0px)); }
+
+/* Shared glass-pill base, reusing the recipe's custom properties — only
+ * shape/size/color differ per control below. */
+.edge-toggle,
+.settings-btn,
+.tools-toggle,
+.hud .home-link {
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(14px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(14px) var(--glass-sat);
+  border: var(--glass-hairline);
+  box-shadow: var(--glass-rim);
 }
 
 /* ---------- Full-bleed viewport ---------- */
@@ -97,11 +105,20 @@ html[data-theme="dark"] header {
  * open. Centering keeps it in the gap between the two, visible regardless
  * of which panels are open.
  *
- * top:64px (header's 52px + a 12px gap) keeps it — and the edge toggles,
- * which share that offset — clear of the floating header above. */
+ * top:12px matches the HUD clusters' own offset. On wide viewports the gap
+ * between the two clusters is wide enough that a centered tray never
+ * touches them, but at mid widths (roughly 900–1300px, before the
+ * narrow-viewport media query below takes over) the gap narrows enough
+ * that it can — max-width caps the tray so it wraps to a second row
+ * (flex-wrap, already set) instead of spilling under a cluster. The
+ * subtracted 520px is 2× the wider (left) cluster's worst-case footprint
+ * — offset + edge-toggle + wordmark pill + tools-toggle pill (which can
+ * grow with a 2-digit tool count) + gaps — plus a small safety margin, so
+ * a centered tray of that max-width never reaches either cluster even
+ * though only the left one is actually that wide. */
 .viewport-toolbar {
   position: absolute;
-  top: 64px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
@@ -110,6 +127,7 @@ html[data-theme="dark"] header {
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
+  max-width: calc(100vw - 520px);
   padding: var(--space-sm) var(--space-md);
   background: var(--glass-veil-dense);
   backdrop-filter: blur(14px) var(--glass-sat);
@@ -262,24 +280,25 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * display:none) keeps the slide-out transition and means the canvas's own
  * size is never affected by panel state.
  *
- * top:0, not top:52px: the panel's own glass now runs the full viewport
- * height, continuing underneath the floating header (z-index 30 > 20)
- * rather than stopping at its bottom edge — "the glass shows canvas
- * through everywhere" the brief asked for. padding-top:52px pushes the
- * panel's actual content (editor-toolbar / chat-header and everything
- * below) down to the exact spot it already occupied under the old
- * top:52px layout, so nothing before this line needed to move — only the
- * translucent backdrop above it got taller. */
+ * top:56px, not 0: a horizontal clearance on .editor-toolbar/.chat-header
+ * (padding-left/right for the HUD cluster's width) was tried first and
+ * doesn't work — both the toolbar and the HUD row want that same top
+ * strip, and a panel's own toolbar wrapping/truncating under an opaque
+ * pill reads as broken, not layered. Moving the whole panel down instead
+ * is a geometry fix, not a padding one: 56px = the HUD row's own bottom
+ * edge (12px top offset + 32px pill height) plus a 12px gap, so the strip
+ * above every panel is bare canvas — glass over the scene, same as
+ * everywhere else — and the panel's toolbar never shares a row with the
+ * clusters at all. */
 .editor-pane,
 .chat-panel {
   position: fixed;
-  top: 0;
+  top: 56px;
   bottom: 0;
   z-index: 20;
   width: min(420px, 92vw);
   display: flex;
   flex-direction: column;
-  padding-top: 52px; /* header height */
   background: var(--glass-veil);
   backdrop-filter: blur(20px) var(--glass-sat);
   -webkit-backdrop-filter: blur(20px) var(--glass-sat);
@@ -308,40 +327,94 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
    * the chat panel is open) rather than the desktop calc() above, which
    * would base the offset on a width the panel no longer actually has. */
   body:has(.chat-panel[data-open="true"]) .vp-report { right: 10px; }
+  /* Below ~900px there isn't reliably enough gap between the two HUD
+   * clusters for a centered tray to sit in their row without touching
+   * one — shift it down to clear both instead of trying to shrink it
+   * further (it already wraps at its own narrowest). 56px = cluster
+   * bottom edge (12px top + 32px pill) + a 12px gap — the same offset
+   * the panels above now use, for the same reason. max-width:none: the
+   * mid-width collision guard above is for the top:12px row only; once
+   * the tray has moved below the clusters there's nothing to collide
+   * with, so let it use the full centering/wrap behavior it always had. */
+  .viewport-toolbar { top: 56px; max-width: none; }
 }
 
 /* ---------- Edge toggle buttons ----------
- * Icon-button pair pinned to the canvas's top corners, always visible over
- * it — clicking one slides its panel in/out. The icon itself is fixed per
+ * Icon-button pair, one per HUD cluster (.hud-left / .hud-right) —
+ * clicking one slides its panel in/out. The icon itself is fixed per
  * button (which side it controls); .on marks the panel's current open
- * state via color rather than swapping glyphs. z-index above the panels
- * so the button stays reachable even once its panel is open alongside it. */
+ * state via color rather than swapping glyphs. Sizing/glass background
+ * come from the shared rule above this file's HUD section; position comes
+ * from the .hud flex row it now lives in, not from the button itself. */
 
 .edge-toggle {
-  position: fixed;
-  top: 64px;
-  z-index: 25;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--glass-veil-dense);
-  backdrop-filter: blur(14px) var(--glass-sat);
-  -webkit-backdrop-filter: blur(14px) var(--glass-sat);
   color: #eceef3;
-  border: var(--glass-hairline);
   border-radius: var(--radius-sm);
   cursor: pointer;
   padding: 0;
-  box-shadow: var(--glass-rim);
+  flex-shrink: 0;
 }
 .edge-toggle:hover { background: rgba(45, 51, 68, .95); color: var(--accent); border-color: var(--accent); }
 .edge-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .edge-toggle.on { color: var(--accent); border-color: var(--accent); }
 
-.edge-toggle-left { left: 12px; }
-.edge-toggle-right { right: 12px; }
+/* ---------- HUD cluster: wordmark, tools trigger, settings gear ----------
+ * The other three pills in the HUD row — text-bearing, so a full pill
+ * radius (999px) instead of the icon buttons' rounded square. Same glass
+ * background as .edge-toggle (shared rule above); only shape/color/type
+ * differ here. */
+
+.hud .home-link {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: #9aa3bb;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.hud .home-link:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+.hud .home-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tools-toggle {
+  height: 32px;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: #eceef3;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tools-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.tools-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tools-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+
+.settings-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: #eceef3;
+  flex-shrink: 0;
+}
+.settings-btn:hover, .settings-btn[aria-expanded="true"] {
+  background: rgba(45, 51, 68, .95);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ---------- Editor pane internals ---------- */
 
@@ -350,16 +423,14 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  /* Clearance for .edge-toggle-left, which floats fixed at the same
-   * top-left corner (outside this panel) rather than inline with this
-   * toolbar's own content. */
-  padding-left: 46px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-/* Same clearance on the chat side, for .edge-toggle-right. */
-.chat-header { padding-right: 46px; }
+/* No .chat-header override here any more — the panel now starts below
+ * the HUD row (top:56px above), so its own toolbar never shares a row
+ * with .hud-right and needs no horizontal clearance for it. Falls back
+ * to chat.css's own padding: 10px var(--space-md). */
 .editor-title { font-weight: 600; font-size: var(--text-sm); color: var(--text-muted); flex: 1; }
 .editor-history {
   font-size: var(--text-xs);
@@ -436,9 +507,10 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * Same wrapper pattern as .settings-wrap/.settings-popover (chat.css) — a
  * position:relative wrapper around just the trigger button, with the panel
  * absolutely positioned under IT, not at some hardcoded viewport offset.
- * Anchoring here is also what keeps this panel clear of .edge-toggle-left:
- * the trigger sits to the right of the "stl-studio" title, past where that
- * button lives, so a panel anchored to the trigger never lands on top of it. */
+ * Anchoring here is also what keeps this panel clear of the left edge
+ * toggle: the trigger sits to the right of it (and the wordmark) in the
+ * .hud-left row, so a panel anchored to the trigger never lands on top of
+ * either. */
 
 .tools-wrap { position: relative; }
 
@@ -466,6 +538,31 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   border-bottom-color: rgba(255, 255, 255, .07);
 }
 
+@media (max-width: 900px) {
+  /* #tools-panel is anchored (position:absolute, left:0) to its trigger
+   * inside .hud-left, which is no longer near the viewport's left edge —
+   * a rightward-expanding min(420px, 90vw) dropdown can run off the
+   * right edge of a narrow viewport. Below the same breakpoint the rest
+   * of the narrow-mode chrome uses, drop the trigger-relative anchor for
+   * a viewport-relative one: position:fixed pins it to the viewport
+   * itself (no ancestor here has a transform, so :fixed's containing
+   * block is the viewport, not .tools-wrap), spanning edge-to-edge with
+   * the same 12px margin and 56px top offset as the panels, so it can
+   * never overflow either edge regardless of the trigger's own position.
+   * (This block has to come after the base .tools-panel rule above, not
+   * next to the other narrow-width overrides earlier in the file — same
+   * specificity, so source order decides, and the base rule would
+   * otherwise win at every width.) */
+  .tools-panel {
+    position: fixed;
+    top: 56px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+  }
+}
+
 /* ---------- settings popover ----------
  * Styled in chat.css as a plain var(--surface) card; overridden here to
  * match the rest of the floating chrome. Text/border/shadow tokens inside
@@ -483,10 +580,10 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * directly on raw canvas/WebGL noise — bump every glass surface to a
  * near-solid dark fill instead. Layered on the same selectors regardless
  * of theme (the dark-glass freeze already made the light-theme tokens
- * irrelevant inside these panels), plus the two theme-scoped header rules. */
+ * irrelevant inside these panels). No header to list any more — every HUD
+ * pill (edge toggles, wordmark, tools trigger, settings gear) is its own
+ * small glass surface now, grouped with the other small chrome below. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  header,
-  html[data-theme="dark"] header,
   .editor-pane,
   .chat-panel,
   .tools-panel,
@@ -496,6 +593,9 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   .viewport-toolbar,
   .vp-report,
   .edge-toggle,
+  .hud .home-link,
+  .tools-toggle,
+  .settings-btn,
   .drop-indicator,
   .drop-indicator-label {
     background: rgba(13, 15, 18, .94);
@@ -504,8 +604,6 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 }
 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  header,
-  html[data-theme="dark"] header,
   .editor-pane,
   .chat-panel,
   .tools-panel,
@@ -517,6 +615,9 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   .viewport-toolbar,
   .vp-report,
   .edge-toggle,
+  .hud .home-link,
+  .tools-toggle,
+  .settings-btn,
   .drop-indicator,
   .drop-indicator-label {
     background: rgba(13, 15, 18, .94);

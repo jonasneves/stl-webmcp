@@ -17,16 +17,25 @@
 </head>
 <body>
   <div class="main-column">
-    <header>
-      <div class="header-left">
-        <h1><a class="home-link" href="../">stl-studio</a></h1>
-        <div class="tools-wrap">
-          <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
-          <div class="tools-panel" id="tools-panel" data-collapsed="true">
-            <div class="tools-panel-inner" id="tools-panel-inner"></div>
-          </div>
+    <div class="hud hud-left">
+      <button id="panel-toggle-left" class="edge-toggle" type="button"
+        aria-expanded="true" aria-controls="editor-pane" title="Toggle script panel">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <defs><clipPath id="clip-toggle-left-hud"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
+          <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="2.75" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-left-hud)"/>
+        </svg>
+      </button>
+      <a class="home-link" href="../">stl-studio</a>
+      <div class="tools-wrap">
+        <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
+        <div class="tools-panel" id="tools-panel" data-collapsed="true">
+          <div class="tools-panel-inner" id="tools-panel-inner"></div>
         </div>
       </div>
+    </div>
+
+    <div class="hud hud-right">
       <div class="settings-wrap">
         <button class="settings-btn" id="settings-btn" aria-label="Settings" aria-expanded="false" aria-controls="settings-popover" title="Settings">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
@@ -57,7 +66,15 @@
           </div>
         </div>
       </div>
-    </header>
+      <button id="panel-toggle-right" class="edge-toggle" type="button"
+        aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <defs><clipPath id="clip-toggle-right-hud"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
+          <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="11.5" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-right-hud)"/>
+        </svg>
+      </button>
+    </div>
 
     <main>
       <section class="viewport-pane">
@@ -78,15 +95,6 @@
     </main>
   </div>
 
-  <button id="panel-toggle-left" class="edge-toggle edge-toggle-left" type="button"
-    aria-expanded="true" aria-controls="editor-pane" title="Toggle script panel">
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <defs><clipPath id="clip-toggle-left"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
-      <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
-      <rect x="2.75" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-left)"/>
-    </svg>
-  </button>
-
   <aside class="editor-pane" id="editor-pane" data-open="true">
     <div class="editor-toolbar">
       <span class="editor-title">Script</span>
@@ -100,15 +108,6 @@
       aria-label="CSG script"></textarea>
     <div id="editor-status" class="editor-status" role="status"></div>
   </aside>
-
-  <button id="panel-toggle-right" class="edge-toggle edge-toggle-right" type="button"
-    aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel">
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <defs><clipPath id="clip-toggle-right"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
-      <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
-      <rect x="11.5" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-right)"/>
-    </svg>
-  </button>
 
   <aside class="chat-panel" id="chat-panel-el" data-open="true">
     <div class="chat-header">
