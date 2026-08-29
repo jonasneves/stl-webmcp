@@ -8,12 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='15'%3E%F0%9F%A7%8A%3C/text%3E%3C/svg%3E">
   <title>stl-studio</title>
   <link rel="stylesheet" href="app.css">
-  <link rel="stylesheet" href="chat.css">
   <link rel="stylesheet" href="cad.css">
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js" as="script">
-  <link rel="preload" href="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" as="script">
-  <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
 <body>
   <div class="main-column">
@@ -81,52 +76,6 @@
           </button>
         </div>
       </div>
-      <div class="tools-wrap">
-        <button class="tools-toggle" id="tools-toggle" aria-expanded="false" aria-controls="tools-panel">&#9660; tools</button>
-        <div class="tools-panel" id="tools-panel" data-collapsed="true">
-          <div class="tools-panel-inner" id="tools-panel-inner"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="hud hud-right">
-      <div class="settings-wrap">
-        <button class="settings-btn" id="settings-btn" aria-label="Settings" aria-expanded="false" aria-controls="settings-popover" title="Settings">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M10 2.5L12.75 5.24L16.5 6.25L15.5 10L16.5 13.75L12.75 14.76L10 17.5L7.25 14.76L3.5 13.75L4.5 10L3.5 6.25L7.25 5.24Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            <circle cx="10" cy="10" r="2.2" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
-        <div class="settings-popover" id="settings-popover" hidden role="dialog" aria-label="Settings">
-          <!-- Appearance/theme section removed: every surface in this app is
-               frozen dark-glass (cad.css's dark-token freeze) regardless of
-               html[data-theme], so the System/Light/Dark control had zero
-               observable effect. The design has committed to dark instead —
-               see the boot script below. Local agent is now the popover's
-               only section. -->
-          <div class="settings-section">
-            <div class="settings-section-label">Local agent</div>
-            <select class="chat-model-select" id="model-select" aria-label="Model">
-              <option value="termd:default">Daemon default</option>
-              <option value="termd:sonnet">Claude Sonnet 5</option>
-              <option value="termd:opus">Claude Opus 5</option>
-              <option value="termd:haiku">Claude Haiku 4.5</option>
-            </select>
-            <p class="settings-note" id="termd-status" hidden>
-              Not detected. stl-studio runs the model on your own machine &mdash;
-              <a href="https://jonasneves.com/termd/" target="_blank" rel="noopener">install termd and the bridge extension</a>, then reload.
-            </p>
-          </div>
-        </div>
-      </div>
-      <button id="panel-toggle-right" class="edge-toggle" type="button"
-        aria-expanded="true" aria-controls="chat-panel-el" title="Toggle chat panel" aria-label="Toggle chat panel">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <defs><clipPath id="clip-toggle-right-hud"><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25"/></clipPath></defs>
-          <rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
-          <rect x="11.5" y="3.75" width="5.75" height="12.5" fill="currentColor" clip-path="url(#clip-toggle-right-hud)"/>
-        </svg>
-      </button>
     </div>
 
     <main>
@@ -170,7 +119,7 @@
           </button>
         </div>
         <canvas id="gl"></canvas>
-        <div id="vp-empty" class="vp-empty">No shape yet — describe one in chat, or write a script and hit Run.</div>
+        <div id="vp-empty" class="vp-empty">No shape yet — write a script and hit Run, or ask a WebMCP-aware agent to build one.</div>
         <div id="vp-report" class="vp-report" hidden></div>
       </section>
     </main>
@@ -189,58 +138,9 @@
     <div id="editor-status" class="editor-status" role="status"></div>
   </aside>
 
-  <aside class="chat-panel" id="chat-panel-el" data-open="true">
-    <div class="chat-header">
-      <span class="chat-header-title">Chat</span>
-      <span class="chat-model-label" id="chat-model-label">Claude</span>
-      <button class="btn btn-sm" id="chat-reset" aria-label="Clear chat">Clear</button>
-    </div>
-    <div class="chat-messages" id="chat-messages"></div>
-    <div class="chat-input-area">
-      <div class="chat-input-wrap">
-        <textarea class="chat-input" id="chat-input" placeholder="Describe a part&#8230;" rows="1" aria-label="Chat message"></textarea>
-        <button class="chat-send-btn" id="chat-send" aria-label="Send message" title="Send">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button class="chat-abort-btn" id="chat-abort" hidden aria-label="Stop generating" title="Stop">
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-            <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </aside>
-
-  <div class="toast-container" id="toast-container" role="status" aria-live="polite"></div>
-
   <div class="drop-indicator" id="drop-indicator" hidden aria-hidden="true">
     <div class="drop-indicator-label">Drop STL to import</div>
   </div>
-
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
-    <form method="dialog">
-      <p class="dialog-title" id="confirm-title">Confirm action</p>
-      <p class="dialog-tool" id="confirm-tool"></p>
-      <p class="dialog-args" id="confirm-args"></p>
-      <div class="dialog-actions">
-        <button class="btn-cancel" value="cancel">Cancel</button>
-        <button class="btn-confirm" value="confirm">Confirm</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="prompt-dialog" aria-labelledby="prompt-title">
-    <form method="dialog">
-      <p class="dialog-title" id="prompt-title"></p>
-      <input type="text" class="dialog-input" id="prompt-input" autocomplete="off">
-      <div class="dialog-actions">
-        <button class="btn-cancel" value="cancel">Skip</button>
-        <button class="btn-confirm" value="confirm">Add</button>
-      </div>
-    </form>
-  </dialog>
 
   <!-- Reference sheet for the CSG DSL, opened from the app menu. No
        method="dialog" form and no backdrop-click close: dialogs dismiss by
@@ -258,17 +158,6 @@
     <pre class="api-dialog-body" id="api-dialog-body" tabindex="0"></pre>
   </dialog>
 
-  <script>
-    // The design has committed to dark — no Appearance switcher (see the
-    // settings popover above). This also seeds localStorage under the key
-    // docs/runtime/theme.js reads: main.js's mount() unconditionally calls
-    // that vendored module's initTheme() later, which re-resolves the theme
-    // from storage (defaulting to the OS's own light/dark preference) — a
-    // bare `dataset.theme = 'dark'` here would get silently overwritten a
-    // moment later for anyone whose system prefers light.
-    localStorage.setItem('webmcp-theme', 'dark');
-    document.documentElement.dataset.theme = 'dark';
-  </script>
   <script type="importmap">
   {
     "imports": {

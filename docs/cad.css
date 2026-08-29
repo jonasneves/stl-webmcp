@@ -1,23 +1,24 @@
 /* stl-studio layout: the canvas always fills every pixel of the window —
  * there is no header bar at all. Every control is a small glass pill,
- * fixed-positioned directly over the canvas in one of two HUD clusters
- * pinned to the top corners (.hud-left / .hud-right); the script editor /
- * chat panels are floating overlays docked left/right, each independently
- * toggleable, so opening/closing them never reflows the viewport. Pairs
- * with app.css (tokens, header, settings, dialogs) and chat.css (chat
- * surface + component styles) — both loaded unmodified from webmcp. This
- * file overrides their GRID layout (header/tools/source/work/chat rows)
- * with a single full-bleed content area — app.css/chat.css's `header`
- * selectors simply no longer match anything — and repositions
- * .tools-panel / .chat-panel / .settings-popover as glass overlays to
- * match — inspired by termd's frosted-glass chrome
- * (../termd/web/styles.css), since the WebGL scene behind everything is
- * always dark regardless of theme.
+ * fixed-positioned directly over the canvas in a single HUD cluster pinned
+ * to the top-left corner (.hud-left); the script editor is a floating
+ * overlay docked left, independently toggleable, so opening/closing it
+ * never reflows the viewport. Pairs with app.css (tokens only — colors,
+ * spacing, radius, duration/ease, fonts) — loaded unmodified from webmcp.
+ * This file owns the actual page GRID (a single full-bleed content area —
+ * app.css's `header`/`tools-panel`/`settings` selectors simply don't match
+ * anything here) and repositions .app-menu as a glass overlay to match —
+ * inspired by termd's frosted-glass chrome (../termd/web/styles.css), since
+ * the WebGL scene behind everything is always dark regardless of theme.
  *
- * `body`'s `display: grid` is `!important` in chat.css, but the specific
- * template properties below aren't — this file loads after chat.css, so
- * equal-specificity `body{...}` rules here win the cascade without needing
- * !important of our own. */
+ * There used to be a second HUD cluster (.hud-right) and a chat panel
+ * mirroring .editor-pane on the right — both were the embedded first-party
+ * chat's UI, removed in favor of exposing the same operations as
+ * document.modelContext WebMCP tools (main.js) for any browser-integrated
+ * agent to call directly. `body`'s `display: grid` used to come from
+ * chat.css (`!important`, so it survived cascade order regardless of this
+ * file's own specificity) — with that file gone, this rule now owns the
+ * declaration itself. */
 
 /* ---------- Glass recipe ----------
  * One frost recipe, reused everywhere something floats over the canvas:
@@ -44,42 +45,29 @@
 }
 
 body {
+  display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
   grid-template-areas: "work";
 }
 main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
 
-/* Standard visually-hidden pattern: present to assistive tech, invisible
- * and out of layout for everyone else. Used by main.js for the chat
- * settle-announcement live region (a screen-reader-only status node —
- * see the comment above the MutationObserver in main.js for why it's
- * separate from #chat-messages itself). */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* ---------- HUD corner clusters ----------
- * No header bar: the two toggle buttons, the wordmark, the tools dropdown
- * trigger and the settings gear are each their own small glass pill,
- * floating directly over the canvas. .hud is a plain fixed-position flex
- * row — it carries no background of its own, only layout — so the row
- * reads as loose chrome rather than a bar; each pill inside gets its own
- * glass treatment below. Mirrors the .edge-toggle recipe already used for
- * the two panel toggles. z-index 30 keeps every pill above the panels
- * (z-index 20) and the tools/settings dropdowns anchored to them.
+/* ---------- HUD corner cluster ----------
+ * No header bar: the panel toggle and the wordmark are each their own small
+ * glass pill, floating directly over the canvas. .hud is a plain
+ * fixed-position flex row — it carries no background of its own, only
+ * layout — so the row reads as loose chrome rather than a bar; each pill
+ * inside gets its own glass treatment below. z-index 30 keeps every pill
+ * above the editor panel (z-index 20) and the app-menu dropdown anchored to
+ * it.
  *
  * env(safe-area-inset-*) padding keeps the pills clear of a device notch
  * in landscape (iPhone-class devices); the fallback 0px makes this a
- * no-op everywhere else. */
+ * no-op everywhere else. There used to be a mirrored .hud-right cluster
+ * (chat panel toggle + settings gear) — removed with the embedded chat;
+ * .hud-left is the only cluster left, but keeps its side-qualified name
+ * since .hud itself (the shared flex-row base) still needs one selector
+ * per corner to place it. */
 .hud {
   position: fixed;
   top: calc(12px + env(safe-area-inset-top, 0px));
@@ -89,15 +77,12 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   gap: 8px;
 }
 .hud-left { left: calc(12px + env(safe-area-inset-left, 0px)); }
-.hud-right { right: calc(12px + env(safe-area-inset-right, 0px)); }
 
-/* Shared glass-pill base: every small floating pill — the HUD toggles,
- * wordmark, tools trigger and settings gear here, plus the viewport
- * toolbar tray and position-report card further below — reuses this
- * exact recipe; shape, size and color stay with each control's own rule. */
+/* Shared glass-pill base: every small floating pill — the HUD toggle,
+ * wordmark here, plus the viewport toolbar tray and position-report card
+ * further below — reuses this exact recipe; shape, size and color stay
+ * with each control's own rule. */
 .edge-toggle,
-.settings-btn,
-.tools-toggle,
 .app-menu-btn,
 .viewport-toolbar,
 .vp-report {
@@ -126,23 +111,22 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   touch-action: none;
 }
 
-/* Centered, not left-anchored: the editor and chat overlays each claim a
- * ~420px band at the left/right edges (below), so a left-aligned toolbar
- * would sit directly under the editor panel and be hidden whenever it's
- * open. Centering keeps it in the gap between the two, visible regardless
- * of which panels are open.
+/* Centered, not left-anchored: the editor overlay claims a ~420px band at
+ * the left edge (below), so a left-aligned toolbar would sit directly under
+ * it and be hidden whenever it's open. Centering keeps it clear regardless
+ * of panel state.
  *
- * top:12px matches the HUD clusters' own offset. On wide viewports the gap
- * between the two clusters is wide enough that a centered tray never
- * touches them, but at mid widths (roughly 900–1300px, before the
- * narrow-viewport breakpoint below takes over) the gap narrows enough
- * that it can — max-width caps the tray so it wraps to a second row
- * (flex-wrap, already set) instead of spilling under a cluster. The
- * subtracted 520px is 2× the wider (left) cluster's worst-case footprint
- * — offset + edge-toggle + wordmark pill + tools-toggle pill (which can
- * grow with a 2-digit tool count) + gaps — plus a small safety margin, so
- * a centered tray of that max-width never reaches either cluster even
- * though only the left one is actually that wide. */
+ * top:12px matches the HUD cluster's own offset. On wide viewports the gap
+ * to the left cluster is wide enough that a centered tray never touches it,
+ * but at mid widths (roughly 900–1300px, before the narrow-viewport
+ * breakpoint below takes over) the gap narrows enough that it can —
+ * max-width caps the tray so it wraps to a second row (flex-wrap, already
+ * set) instead of spilling under it. The subtracted 520px was sized to
+ * clear two HUD clusters (this one, plus a now-removed .hud-right that used
+ * to sit at the opposite edge) — with only .hud-left left standing, this is
+ * a wider safety margin than strictly needed, but shrinking it is a visual
+ * retune that wants a browser in front of it, not a mechanical edit
+ * alongside the chat removal that orphaned .hud-right. */
 .viewport-toolbar {
   position: absolute;
   top: 12px;
@@ -232,23 +216,10 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
   text-align: right;
   line-height: 1.6;
   pointer-events: none;
-  transition: right 220ms var(--ease);
 }
 .vp-report .vp-report-bad { color: var(--risk-high, #ef4444); }
 .vp-report .vp-report-good { color: var(--risk-low); }
 .vp-report .vp-report-dim { color: #9aa3bb; }
-
-/* The chat panel (.chat-panel, open by default) is a fixed right-hand
- * overlay that sits on top of this card at its default right:10px — shift
- * clear of it whenever the panel is open so manifold status/tri count/dims
- * stay visible. Narrow viewports are handled separately (see the
- * breakpoint below): the panel goes full-width there and there's no clear
- * spot to shift to, so the card deliberately stays put (and covered)
- * rather than jumping to a mid-screen position that would itself get
- * overlapped by panel content. */
-body:has(.chat-panel[data-open="true"]) .vp-report {
-  right: calc(min(420px, 92vw) + 10px);
-}
 
 /* ---------- Drop-to-import indicator ----------
  * main.js already counts window dragenter/dragleave depth (to swallow the
@@ -294,34 +265,25 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * overlay. Rather than maintain two low-alpha recipes, these panels commit
  * to the dark theme's own token values regardless of html[data-theme],
  * same as termd's sidebar: one glass recipe, and every var(--surface) /
- * var(--text) / var(--accent) etc. used by app.css/chat.css inside them
- * (chat bubbles, tool cards, badges, the tools-panel's tool-item cards,
- * the settings popover) resolves correctly with no further overrides.
+ * var(--text) / var(--accent) etc. used by app.css inside them (the
+ * app-menu's items/meta) resolves correctly with no further overrides.
  *
- * The six HUD/viewport selectors below sit outside all of those
- * containers (none is a descendant of .editor-pane/.chat-panel/etc, so
- * none inherited the freeze) but each still reads var(--accent) or
+ * The four HUD/viewport selectors below sit outside both of those
+ * containers (neither is a descendant of .editor-pane/.app-menu, so
+ * neither inherited the freeze) but each still reads var(--accent) or
  * var(--risk-*) directly — .viewport-toolbar and .vp-report via their own
  * child rules further down this file (button:hover/.on, .vp-report-bad),
- * .edge-toggle/.tools-toggle/.settings-btn/.app-menu-btn on themselves
- * (:hover/[aria-expanded]/.on) — over the same always-dark canvas as the
- * panels above. Without freezing them too, they silently forked colors
- * whenever html[data-theme] resolved to "light" (accent #0d9488 vs this
- * file's #2dd4bf, risk-high #dc2626 vs #ef4444, etc.) instead of matching
- * the frozen chrome around them. */
+ * .edge-toggle/.app-menu-btn on themselves (:hover/[aria-expanded]/.on) —
+ * over the same always-dark canvas as the panels above. Without freezing
+ * them too, they silently forked colors whenever html[data-theme] resolved
+ * to "light" (accent #0d9488 vs this file's #2dd4bf, risk-high #dc2626 vs
+ * #ef4444, etc.) instead of matching the frozen chrome around them. */
 .editor-pane,
-.chat-panel,
-.tools-panel,
-.settings-popover,
 .app-menu,
-#confirm-dialog,
-#prompt-dialog,
 #api-dialog,
 .viewport-toolbar,
 .vp-report,
 .edge-toggle,
-.tools-toggle,
-.settings-btn,
 .app-menu-btn {
   color-scheme: dark;
   --surface: #1a1d24;
@@ -331,9 +293,7 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   --text-muted: #8b92a5;
   --bg: #0f1117;
   --accent: #2dd4bf;
-  --accent-dim: #0f3935;
   --risk-low: #22c55e;
-  --risk-med: #f59e0b;
   --risk-high: #ef4444;
   --badge-green-bg: #052e16;
   --badge-amber-bg: #3d1f00;
@@ -343,27 +303,26 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, .5), 0 4px 8px rgba(0, 0, 0, .3);
 }
 
-/* ---------- Floating side panels (editor left, chat right) ----------
- * Fixed to the viewport, not the grid — they overlay the canvas rather
- * than sharing space with it. Sliding them off-screen via transform (not
+/* ---------- Floating side panel (editor) ----------
+ * Fixed to the viewport, not the grid — it overlays the canvas rather than
+ * sharing space with it. Sliding it off-screen via transform (not
  * display:none) keeps the slide-out transition and means the canvas's own
  * size is never affected by panel state.
  *
- * top:56px, not 0: a horizontal clearance on .editor-toolbar/.chat-header
- * (padding-left/right for the HUD cluster's width) was tried first and
- * doesn't work — both the toolbar and the HUD row want that same top
- * strip, and a panel's own toolbar wrapping/truncating under an opaque
- * pill reads as broken, not layered. Moving the whole panel down instead
- * is a geometry fix, not a padding one: 56px = the HUD row's own bottom
- * edge (12px top offset + 32px pill height) plus a 12px gap, so the strip
- * above every panel is bare canvas — glass over the scene, same as
- * everywhere else — and the panel's toolbar never shares a row with the
- * clusters at all. */
-.editor-pane,
-.chat-panel {
+ * top:56px, not 0: a horizontal clearance on .editor-toolbar (padding-left
+ * for the HUD cluster's width) was tried first and doesn't work — both the
+ * toolbar and the HUD row want that same top strip, and the panel's own
+ * toolbar wrapping/truncating under an opaque pill reads as broken, not
+ * layered. Moving the whole panel down instead is a geometry fix, not a
+ * padding one: 56px = the HUD row's own bottom edge (12px top offset + 32px
+ * pill height) plus a 12px gap, so the strip above the panel is bare
+ * canvas — glass over the scene, same as everywhere else — and the panel's
+ * toolbar never shares a row with the cluster at all. */
+.editor-pane {
   position: fixed;
   top: 56px;
   bottom: 0;
+  left: 0;
   z-index: 20;
   width: min(420px, 92vw);
   display: flex;
@@ -372,27 +331,14 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   backdrop-filter: blur(20px) var(--glass-sat);
   -webkit-backdrop-filter: blur(20px) var(--glass-sat);
   box-shadow: var(--shadow-lg);
+  border-right: var(--glass-hairline);
   transition: transform 220ms var(--ease);
-  /* Reset webmcp's chat-panel-as-grid-card styling — it's a full-height
-   * overlay here, not a margined card next to the work column. Also
-   * neutralizes chat.css's own max-width:768px rule capping .chat-panel
-   * to 60dvh — that was sized for it sharing a grid row with the work
-   * column, which never happens at any width here. */
-  margin: 0;
-  border-radius: 0;
-  max-height: none;
 }
-
-.editor-pane { left: 0; border-right: var(--glass-hairline); border-left: none; }
 .editor-pane[data-open="false"] { transform: translateX(-100%); }
 
-.chat-panel { right: 0; border-left: var(--glass-hairline); }
-.chat-panel[data-open="false"] { transform: translateX(100%); }
-
-/* ---------- Edge toggle buttons ----------
- * Icon-button pair, one per HUD cluster (.hud-left / .hud-right) —
- * clicking one slides its panel in/out. The icon itself is fixed per
- * button (which side it controls); .on marks the panel's current open
+/* ---------- Edge toggle button ----------
+ * Sits in the HUD cluster — clicking it slides the editor panel in/out.
+ * .on marks the panel's current open
  * state via color rather than swapping glyphs. Sizing/glass background
  * come from the shared rule above this file's HUD section; position comes
  * from the .hud flex row it now lives in, not from the button itself. */
@@ -481,18 +427,21 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 .app-menu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- App menu dropdown ----------
- * Anchored to its own trigger via .app-menu-wrap, the same wrapper pattern
- * .tools-wrap/.settings-wrap use. Glass comes from the shared dropdown
- * recipe further down (§ tools-panel), which this selector was added to —
- * three consumers, one recipe. Plain `hidden` toggling rather than
- * .tools-panel's max-height animation: that panel animates because its
- * content height varies with the tool count, while this menu is a fixed
- * four-row list where a slide adds latency to every open.
+ * Anchored to its own trigger via .app-menu-wrap — a position:relative
+ * wrapper around just the trigger button, with the menu absolutely
+ * positioned under IT, not at some hardcoded viewport offset. Plain
+ * `hidden` toggling, not a height animation: this is a fixed four-row list
+ * where a slide would only add latency to every open.
  *
- * Narrow viewports need no override (unlike .tools-panel, which goes
- * position:fixed below): at 240px wide anchored to a trigger ~12px from the
- * left edge, this menu cannot reach the right edge of any viewport the app
- * is usable at. */
+ * Glass background/border/shadow used to be a recipe shared with two other
+ * trigger-anchored dropdowns (the tools panel, the settings popover) that
+ * went with the embedded chat — now that this is the only one, the
+ * declarations are inlined below rather than kept as a one-selector "shared"
+ * rule.
+ *
+ * No narrow-viewport override needed: at 240px wide anchored to a trigger
+ * ~12px from the left edge, this menu cannot reach the right edge of any
+ * viewport the app is usable at. */
 .app-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -504,6 +453,11 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  background: var(--glass-veil-dense);
+  backdrop-filter: blur(20px) var(--glass-sat);
+  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
+  border: var(--glass-hairline);
+  box-shadow: var(--glass-rim);
 }
 .app-menu[hidden] { display: none; }
 
@@ -556,9 +510,9 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 .app-menu-item:disabled:hover { background: transparent; }
 .app-menu-item:disabled:hover svg { color: var(--text-muted); }
 
-/* Same quiet-destructive treatment as #chat-reset (§ approval card): the
- * risk hue appears on interaction, not at rest, so a row that is red all the
- * time doesn't compete with the tool cards' own risk-high badges. */
+/* Quiet-destructive treatment: the risk hue appears on interaction, not at
+ * rest, so the row isn't permanently red for something that only fires on
+ * a deliberate click. */
 .app-menu-item.destructive:hover:not(:disabled),
 .app-menu-item.destructive:focus-visible:not(:disabled) { color: var(--risk-high); }
 .app-menu-item.destructive:hover:not(:disabled) svg { color: var(--risk-high); }
@@ -576,38 +530,6 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
 }
 .app-menu-count:empty { display: none; }
 
-.tools-toggle {
-  height: 32px;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: #eceef3;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.tools-toggle:hover { color: var(--accent); border-color: var(--accent); }
-.tools-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.tools-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-
-.settings-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  color: #eceef3;
-  flex-shrink: 0;
-}
-.settings-btn:hover, .settings-btn[aria-expanded="true"] {
-  background: rgba(45, 51, 68, .95);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.settings-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
 /* ---------- Editor pane internals ---------- */
 
 .editor-toolbar {
@@ -619,10 +541,6 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   flex-shrink: 0;
 }
 
-/* No .chat-header override: the panel starts below the HUD row (top:56px
- * above), so its toolbar never shares a row with .hud-right and needs no
- * horizontal clearance. Falls back to chat.css's own padding:
- * 10px var(--space-md). */
 .editor-title { font-weight: 600; font-size: var(--text-sm); color: var(--text-muted); flex: 1; }
 .editor-history {
   font-size: var(--text-xs);
@@ -644,7 +562,7 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px; /* matches this file's other intra-cluster gaps (.viewport-toolbar, .msg-tool-header) */
+  gap: 6px; /* matches this file's other intra-cluster gaps (.viewport-toolbar) */
   flex-shrink: 0;
 }
 .btn-run:hover { filter: brightness(1.08); }
@@ -691,93 +609,19 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * it needs to be transparent, not muted, for the gradient text-clip to
  * show. */
 
-/* ---------- tools-panel: anchor to its own trigger, not the viewport ----------
- * Same wrapper pattern as .settings-wrap/.settings-popover (chat.css) — a
- * position:relative wrapper around just the trigger button, with the panel
- * absolutely positioned under IT, not at some hardcoded viewport offset.
- * Anchoring here is also what keeps this panel clear of the left edge
- * toggle: the trigger sits to the right of it (and the wordmark) in the
- * .hud-left row, so a panel anchored to the trigger never lands on top of
- * either. */
-
-.tools-wrap { position: relative; }
-
-/* Glass recipe shared with .settings-popover below and .app-menu above —
- * all three are dropdown-style overlays anchored to a trigger, unlike the
- * plainer-veil side panels above. */
-.tools-panel,
-.settings-popover,
-.app-menu {
-  background: var(--glass-veil-dense);
-  backdrop-filter: blur(20px) var(--glass-sat);
-  -webkit-backdrop-filter: blur(20px) var(--glass-sat);
-  border: var(--glass-hairline);
-  box-shadow: var(--glass-rim);
-}
-
-/* max-height:0 alone still paints a live box: at zero height the top and
- * bottom border (plus box-shadow) coincide on the same line, so a
- * "collapsed" dropdown actually renders as a stray 1px hairline + shadow
- * smear floating under its trigger — visible even though there's no
- * content showing. visibility:hidden removes the box from paint entirely;
- * the delayed transition (0s duration, delayed until AFTER the collapse
- * animation finishes) means it still visibly slides shut first, and the
- * delay resets to 0 on open so it appears instantly instead of lagging
- * behind the growing max-height. */
-.tools-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 25;
-  width: min(420px, 90vw);
-  max-height: 0;
-  visibility: hidden;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  transition: max-height var(--duration-slow) var(--ease),
-    border-color var(--duration-slow) var(--ease),
-    visibility 0s linear var(--duration-slow);
-}
-.tools-panel[data-collapsed="false"] {
-  max-height: min(60vh, 600px);
-  visibility: visible;
-  transition-delay: 0s;
-  overflow-y: auto;
-  /* app.css's own [data-collapsed="false"] rule turns this edge solid
-   * (var(--border)) on expand; keep it the same hairline as the other 3
-   * sides instead of letting that higher-specificity rule win just here. */
-  border-bottom-color: rgba(255, 255, 255, .07);
-}
-
-/* ---------- settings popover ----------
- * Styled in chat.css as a plain var(--surface) card; shares the
- * .tools-panel glass recipe above so it matches the rest of the floating
- * chrome. Text/border/shadow tokens inside it already come from the
- * dark-glass freeze above. */
-
 /* ---------- Narrow-viewport breakpoint (≤900px) ----------
- * Every narrow-width override in the file, in one place. The .tools-panel
- * rule below must stay textually after the base .tools-panel rule above —
- * same specificity, so source order decides, and the base rule would
- * otherwise win at every width — which is why this whole breakpoint lives
- * down here rather than beside .editor-pane/.chat-panel where the first
- * three rules would otherwise sit topically. */
+ * Every narrow-width override in the file, in one place. */
 @media (max-width: 900px) {
-  .editor-pane, .chat-panel { width: 100vw; }
-  /* Panel is full-width here, so there's no "clear" position to shift the
-   * report card to — deliberately leave it at right:10px (covered while
-   * the chat panel is open) rather than the desktop calc() above, which
-   * would base the offset on a width the panel no longer actually has. */
-  body:has(.chat-panel[data-open="true"]) .vp-report { right: 10px; }
-  /* Below ~900px there isn't reliably enough gap between the two HUD
-   * clusters for a centered tray to sit in their row without touching
-   * one — shift it down to clear both instead of trying to shrink it
-   * further (it already wraps at its own narrowest). 56px = cluster
-   * bottom edge (12px top + 32px pill) + a 12px gap — the same offset
-   * the panels use above, for the same reason. max-width:none: the
-   * mid-width collision guard above is for the top:12px row only; once
-   * the tray has moved below the clusters there's nothing to collide
-   * with, so let it use the full centering/wrap behavior it always had. */
+  .editor-pane { width: 100vw; }
+  /* Below ~900px there isn't reliably enough gap between the HUD cluster
+   * and the viewport edge for a centered tray to sit in that row without
+   * touching it — shift it down to clear it instead of trying to shrink it
+   * further (it already wraps at its own narrowest). 56px = cluster bottom
+   * edge (12px top + 32px pill) + a 12px gap — the same offset the editor
+   * panel uses above, for the same reason. max-width:none: the mid-width
+   * collision guard above is for the top:12px row only; once the tray has
+   * moved below the cluster there's nothing to collide with, so let it use
+   * the full centering/wrap behavior it always had. */
   .viewport-toolbar { top: 56px; max-width: none; }
   /* The tray wraps to one button per row at this width, and a divider
    * drawn as a 1px-wide, 20px-tall bar only reads as a separator between
@@ -788,123 +632,16 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
    * to a stack it's as tall as it is wide, and a fully-round tray reads as
    * a blob behind the buttons rather than a surface holding them. */
   .viewport-toolbar { border-radius: var(--radius-lg); }
-  /* #tools-panel is anchored (position:absolute, left:0) to its trigger
-   * inside .hud-left, which is no longer near the viewport's left edge —
-   * a rightward-expanding min(420px, 90vw) dropdown can run off the right
-   * edge of a narrow viewport. Drop the trigger-relative anchor for a
-   * viewport-relative one: position:fixed pins it to the viewport itself
-   * (no ancestor here has a transform, so :fixed's containing block is
-   * the viewport, not .tools-wrap), spanning edge-to-edge with the same
-   * 12px margin and 56px top offset as the panels, so it can never
-   * overflow either edge regardless of the trigger's own position. */
-  .tools-panel {
-    position: fixed;
-    top: 56px;
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-width: none;
-  }
 }
 
-/* ---------- Chat tool cards & dialogs ----------
- * beautifui.dev's language (hairline borders, one accent, mono tabular
- * stats, compact tool chips, quiet approval cards, restrained shimmer)
- * styling chat.js/ui.js's rendered DOM and the app-owned confirm/prompt
- * dialogs. Every selector below was grepped out of docs/runtime/chat.js
- * (.msg-tool-card/-header/-status/-label/-name/-chevron/-body/-args,
- * .chat-divider, .chat-spinner), docs/runtime/ui.js + index.html
- * (#confirm-dialog, #confirm-title, #confirm-tool, .dialog-*), and
- * docs/runtime/tools.js's renderToolsPanel (`<span class="annotation-badge
- * read-only">`, `.idempotent`, `.destructive`, `.closed-world`) — none
- * invented; no DOM or JS changed. */
-
-/* Stats as data (cont'd from .vp-report/.editor-status above): the
- * chat-divider context line (main.js's formatReportLine/formatReferenceLine
- * — "✓ manifold · 412 tri · 40×40×4" — passed to chat.js's appendDivider)
- * isn't already mono like those two; bring it in line. Its ✓/✗ prefix
- * can't get the same dual-channel color treatment as vp-report/
- * editor-status though: chat.js builds this node with plain
- * `.textContent`, a single unmarked text run with no sub-span for CSS to
- * recolor independent of the rest of the line — left as the reference's
- * quiet muted divider-label tone instead of faking it. */
-.chat-divider {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Tool-call chips: chat.js's card is a full shadowed card today: pare it
- * back to a slim hairline row (border already present on .msg-tool-card,
- * hover already present on .msg-tool-header — both vendored, untouched)
- * with the verb in muted text and the trailing detail riding in a small
- * mono chip. .msg-tool-status keeps its existing success/error dual-channel
- * color, also untouched. True Beautiful UI chips also collapse a run of
- * calls into one collapsible "N tool calls" summary; chat.js renders one
- * full card per call with no grouping hook, and building one is a
- * vendored-file or real-DOM change — out of bounds here, skipped. */
-.msg-tool-card {
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-}
-.msg-tool-header {
-  padding: 5px 10px;
-  gap: 6px;
-}
-.msg-tool-name {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-.msg-tool-label {
-  padding: 2px 8px;
-  background: var(--surface-alt);
-  border-radius: var(--radius-sm);
-}
-.msg-tool-chevron { opacity: 0.55; }
-.msg-tool-args {
-  padding: 6px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-/* Tool trust badges (tools-panel's .annotation-badge + kind modifiers,
- * app.css lines ~232-244): app.css renders these as solid saturated pill
- * fills (--badge-*-bg) with equally saturated text — loud all-caps chips
- * that don't match the hairline-chip language the rest of this section
- * uses (.chip, .msg-tool-label above). Flatten to that same pattern —
- * transparent fill, a 1px hairline border, muted text — and demote each
- * kind's hue to a thin border tint only, the way .vp-report-bad above
- * already uses --risk-high directly as a small text color rather than a
- * background fill. Size/caps/weight (app.css) are untouched. */
-.annotation-badge {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-.annotation-badge.read-only { border-color: var(--risk-low); }
-.annotation-badge.idempotent { border-color: var(--accent); }
-.annotation-badge.destructive { border-color: var(--risk-high); }
-.annotation-badge.closed-world { border-color: var(--risk-med); }
-
-/* Approval card: #confirm-dialog / #prompt-dialog (index.html), opened by
- * runtime/ui.js's showConfirmDialog/showPromptDialog — app-owned markup,
- * styled so far only by chat.css's generic `dialog`/.dialog-* rules
- * (hairline border, shadow already present there, untouched).
- * #confirm-title carries the dialog's static "Confirm action" label and
- * #confirm-tool the actual (dynamic) tool name — demote the former to a
- * small muted label and promote the latter, matching the card's real
- * hierarchy. ID selectors, not classes: .dialog-title is shared with
- * #prompt-title, which has no second element to promote (ui.js never
- * calls showPromptDialog in this app today, but the markup is real) — its
- * one heading stays at chat.css's base .dialog-title size rather than
- * being demoted into a label with nothing prominent left under it.
- *
- * Both dialogs also get the dark-glass token freeze above (added to that
- * selector list) so they read as the same frozen-dark surface as every
- * other floating panel instead of a stray white card in light theme — the
- * dialog's own `background: var(--surface)` etc. (chat.css) then resolve
- * to the frozen values with no further overrides needed here, same as the
- * comment on that freeze rule already promises.
+/* ---------- Dialog base ----------
+ * #api-dialog is the only <dialog> left in the app — the confirm/prompt
+ * approval cards this base used to also serve went with the embedded chat.
+ * The background/border/padding/width/shadow/color below used to live in
+ * chat.css (a generic `dialog{}` rule inherited by every dialog on the
+ * page); with that file gone this rule owns them outright. border-radius
+ * stays 16px (not var(--radius-lg), app.css's 14px) — a pre-existing
+ * deliberate mismatch, kept as-is.
  *
  * margin:auto restores native <dialog> top-layer centering. app.css's
  * blanket reset — `*, *::before, *::after { box-sizing: border-box;
@@ -912,11 +649,21 @@ body:has(.chat-panel[data-open="true"]) .vp-report {
  * stylesheet's own `dialog:modal { margin: auto; ... }` centering; author
  * beats user-agent regardless of specificity, which is why a single `*`
  * selector was winning over the browser's own more-specific dialog rule.
- * Neither app.css nor chat.css sets `position`/`inset` on dialog, so only
- * margin needed restoring here — the UA's fixed positioning still applies
- * underneath. */
+ * app.css sets no `position`/`inset` on dialog, so only margin needs
+ * restoring here — the UA's fixed positioning still applies underneath.
+ *
+ * #api-dialog is in the dark-glass token freeze above, so var(--surface) /
+ * var(--border) / var(--text) below resolve to the frozen dark values
+ * regardless of html[data-theme], same as every other floating panel. */
 dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
+  padding: var(--space-lg);
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
   margin: auto;
 }
 dialog::backdrop {
@@ -924,41 +671,23 @@ dialog::backdrop {
   backdrop-filter: blur(6px) var(--glass-sat);
   -webkit-backdrop-filter: blur(6px) var(--glass-sat);
 }
-#confirm-title {
-  font-size: var(--text-xs);
+/* #api-dialog-title carries this class; sizing/weight used to come from
+ * chat.css's own generic .dialog-title rule (gone with that file). */
+.dialog-title {
+  font-size: var(--text-base);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
 }
-#confirm-tool {
-  font-family: var(--mono);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-.dialog-args {
-  font-variant-numeric: tabular-nums;
-  border: 1px solid var(--border);
-}
-.dialog-actions button { border-radius: 100px; }
-
-/* #confirm-dialog only ever opens for a destructiveHint tool (runtime/
- * loop.js's trust gating) — chat.css's shared .btn-confirm is the friendly
- * accent fill, which undersells that. Scope the override to this dialog
- * only: #prompt-dialog reuses the same .btn-confirm class for its benign
- * "Add" action and keeps the accent as-is. */
-#confirm-dialog .btn-confirm { background: var(--risk-high); color: #fff; }
 
 /* Script API sheet — a reference surface, not a decision, so it carries a
- * header with its own × instead of the .dialog-actions button pair. The
- * body is a <pre> holding kernel.js's API_REFERENCE verbatim: that string
- * is plain indented text whose alignment IS the signature list, so it is
- * displayed, never run through marked() like chat content. index.html's
- * tabindex="0" on it keeps the scroll region keyboard-reachable — a
- * scrollable box with no focusable content otherwise isn't.
+ * header with its own × rather than a confirm/cancel button pair. The body
+ * is a <pre> holding kernel.js's API_REFERENCE verbatim: that string is
+ * plain indented text whose alignment IS the signature list, so it's
+ * displayed as-is (main.js sets it via textContent, no markdown parsing
+ * involved). index.html's tabindex="0" on it keeps the scroll region
+ * keyboard-reachable — a scrollable box with no focusable content otherwise
+ * isn't.
  *
  * Sizing lives on [open], not the base selector: an author `display:flex`
  * on a bare <dialog> overrides the UA stylesheet's `display:none` for the
@@ -970,10 +699,10 @@ dialog::backdrop {
    * mono chars) so it lands unwrapped on a desktop viewport — the whole
    * reason for `white-space: pre` below is that these signatures line up
    * column-wise, and a soft wrap mid-argument-list destroys exactly that.
-   * max-width has to be released explicitly: chat.css's `dialog` rule caps
-   * every dialog at 400px, which is right for the approval cards it was
-   * written for and would silently clamp `width` here (max-width wins over
-   * width regardless of this rule's higher specificity). */
+   * max-width has to be released explicitly: the base `dialog` rule above
+   * caps every dialog at 400px and would silently clamp `width` here
+   * (max-width wins over width regardless of this rule's higher
+   * specificity). */
   width: min(760px, 94vw);
   max-width: none;
   max-height: 80vh;
@@ -1025,17 +754,7 @@ dialog::backdrop {
 }
 .api-dialog-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* #chat-reset ("Clear") wipes the whole conversation with no confirm step
- * of its own — a quiet destructive cue on interaction, not at rest, so it
- * doesn't compete with the tool-card badges' own risk-high border. */
-#chat-reset:hover,
-#chat-reset:focus-visible {
-  border-color: var(--risk-high);
-  color: var(--risk-high);
-}
-
-/* Loading shimmer: one sweep keyframe reused for the editor's "busy"
- * status text and the chat's thinking indicator. app.css's
+/* Loading shimmer: the editor's "busy" status text sweep. app.css's
  * prefers-reduced-motion block is a blanket `* { transition: none
  * !important; animation: none !important }` — it already covers
  * animations, not just transitions, so no extra reduced-motion guard is
@@ -1064,29 +783,6 @@ dialog::backdrop {
 @supports not (background-clip: text) {
   .editor-status.busy { background-image: none; color: var(--text-muted); }
 }
-.chat-spinner {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 100px;
-  background: var(--surface-alt);
-}
-.chat-spinner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
-  background-size: 200% 100%;
-  opacity: 0.7;
-  animation: cad-shimmer-sweep 1.2s linear infinite;
-}
-/* chat.js's bounce dots (chat-bounce keyframes, chat.css) are untouched —
- * they just need lifting above the sweep, which paints behind them only
- * because it's the absolutely-positioned one. */
-.chat-spinner span {
-  position: relative;
-  z-index: 1;
-}
 
 /* ---------- Fallbacks: no blur support, or the user has turned it off ----------
  * Browsers without backdrop-filter would otherwise show low-alpha text
@@ -1094,14 +790,11 @@ dialog::backdrop {
  * near-solid --glass-fallback-* tokens (defined in § Glass recipe) instead.
  * Layered on the same selectors regardless of theme (the dark-glass freeze
  * already made the light-theme tokens irrelevant inside these panels).
- * There's no header element to include — every HUD pill (edge toggles,
- * wordmark, tools trigger, settings gear) is its own small glass surface,
- * grouped with the rest of the small chrome below. */
+ * There's no header element to include — every HUD pill (edge toggle,
+ * wordmark) is its own small glass surface, grouped with the rest of the
+ * small chrome below. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .editor-pane,
-  .chat-panel,
-  .tools-panel,
-  .settings-popover,
   .app-menu {
     background: var(--glass-fallback-panel);
   }
@@ -1109,8 +802,6 @@ dialog::backdrop {
   .vp-report,
   .edge-toggle,
   .app-menu-btn,
-  .tools-toggle,
-  .settings-btn,
   .drop-indicator,
   .drop-indicator-label {
     background: var(--glass-fallback-chip);
@@ -1122,9 +813,6 @@ dialog::backdrop {
  * instead of missing browser support. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   .editor-pane,
-  .chat-panel,
-  .tools-panel,
-  .settings-popover,
   .app-menu {
     background: var(--glass-fallback-panel);
     backdrop-filter: none;
@@ -1134,8 +822,6 @@ dialog::backdrop {
   .vp-report,
   .edge-toggle,
   .app-menu-btn,
-  .tools-toggle,
-  .settings-btn,
   .drop-indicator,
   .drop-indicator-label {
     background: var(--glass-fallback-chip);

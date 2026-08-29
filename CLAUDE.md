@@ -5,11 +5,13 @@ Non-obvious design decisions and gotchas. Read the header comments in `main.js`,
 
 ## Ownership boundary
 
-- `app.css`, `chat.css`, `docs/runtime/` are ported UNMODIFIED from `../webmcp` — never edit them
-  here; changes belong upstream. Only `cad.css`, `cad/`, `main.js`, `index.html` are stl-studio's own.
-- `cad.css` loads last. `chat.css`'s `body{display:grid}` is `!important`, but its specific
-  `grid-template-*` properties aren't — equal-specificity rules in `cad.css` win the cascade
-  without needing `!important` of its own. All layout/style overrides go there, not upstream.
+- `app.css` (shared design tokens only — colors, spacing, radius, duration/ease, fonts) is ported
+  UNMODIFIED from `../webmcp` — never edit it here; changes belong upstream. `cad.css`, `cad/`,
+  `main.js`, `index.html` are stl-studio's own.
+- `cad.css` loads last and owns the page's actual grid/layout outright (including `body`'s
+  `display: grid`) — app.css's own `header`/`tools-panel`/`settings` component selectors don't
+  match anything in this app's DOM; only its `:root` tokens are consumed here. All layout/style
+  overrides go in `cad.css`, not upstream.
 
 ## manifold-3d memory model
 
@@ -41,11 +43,17 @@ Non-obvious design decisions and gotchas. Read the header comments in `main.js`,
   shapes disagree on centering silently no-ops (nothing overlaps, nothing gets cut) and still
   reports manifold-ok — check `center` on every operand first when a cut does nothing.
 
-## Chat runtime
+## WebMCP tool surface
 
-- `mount({settingSources: []})` in `main.js` is load-bearing: the embedded agent must only ever
-  see this app's own system prompt (`getSystemPrompt()` + `API_REFERENCE`), never the operator's
-  global `~/.claude` config. Requires a termd build with the `settingSources` knob (`../termd`).
+- `main.js` registers `write_script`/`get_render_report`/`read_script`/`export_stl`/
+  `reset_script` via `document.modelContext.registerTool()`
+  (github.com/webmachinelearning/webmcp, an in-progress W3C proposal) — no embedded chat ships
+  with the app; any browser-integrated agent sharing the tab calls these directly. Support is
+  narrow as of 2026: the ChatGPT desktop app's built-in browser has it, its own Chrome extension
+  and stock Chrome don't (without an experimental flag).
+- `capture_view` from the old embedded-chat tool set is NOT ported: `execute` may return any
+  JSON-serializable value, but the spec has no defined shape yet for image/binary tool output —
+  there's no way to hand an agent the rendered PNG for visual verification. Re-add once one exists.
 
 ## UI/UX principles
 
@@ -53,10 +61,9 @@ Owner directive: use https://www.beautifului.dev/ ("Beautiful UI" — primitives
 interfaces) as the reference for ALL UI/UX elements, icons, and effects. Its language, distilled:
 near-black neutral surfaces; hairline 1px borders and dotted dividers; ONE accent hue used
 sparingly; small rounded pills and segmented controls; tiny muted numbered/uppercase section
-labels; monospace tabular numerals for stats (elapsed time, counts, dims); tool calls as compact
-chips (icon + verb + mono detail, collapsible "N tool calls" summary); quiet human-in-the-loop
-approval cards; shimmer for loading; restrained motion. The material carrying it is termd's
-frosted glass (`../termd/web/styles.css`, glass-pill family), recipe'd at the top of `cad.css`.
+labels; monospace tabular numerals for stats (elapsed time, counts, dims); shimmer for loading;
+restrained motion. The material carrying it is termd's frosted glass (`../termd/web/styles.css`,
+glass-pill family), recipe'd at the top of `cad.css`.
 
 The rules below are how that directive binds in practice. Each names where it binds — this is the
 index; the `cad.css` comment at that spot is the reasoning.
@@ -78,22 +85,15 @@ index; the `cad.css` comment at that spot is the reasoning.
 - **Contrast is measured, not chosen.** `app.css` states its ratios inline (`--text-source` 6.34:1,
   `--text-caveat` 6.23:1); new color over the frozen surface states its own the same way.
 - **Color is never the only carrier.** `.vp-report` / `.editor-status` pair hue with a ✓/✗ glyph.
-  Where the second channel isn't reachable — `.chat-divider` is one unmarked `textContent` run with
-  no sub-span to recolor — stay quiet and say why in the comment; never fake it.
+  Where a second channel isn't reachable, stay quiet and say why in the comment; never fake it.
 - **Floors are themed once; exemptions name their reason.** Focus is `2px solid var(--accent)` on
   every control, restyled per control but never removed. Touch targets: SC 2.5.8's 24px is a
   mouse-era number, bumped to 40px under `@media (pointer: coarse)` only where the input is one.
-- **Dismiss grammar.** Popovers and menus (settings, tools, app menu): outside-click + Escape.
-  Dialogs (`#confirm-dialog`, `#prompt-dialog`): their own buttons or Escape only — an outside
-  click would drop an in-flight approval.
-- **Destructive actions cue on interaction, not at rest.** `#chat-reset` and the app menu's
-  clear-history item turn `--risk-high` on hover/focus instead of wearing red permanently, which
-  would compete with the tool cards' own risk badges. Where the cost is countable, show the count
-  rather than adding a confirm step.
-- **Style the vendored DOM; never edit it.** Every selector in § Chat tool cards was grepped out of
-  `docs/runtime/*.js` — none invented, no DOM or JS changed. When the reference wants a DOM change
-  (Beautiful UI's collapsible "N tool calls" summary), record it as skipped in the comment rather
-  than reaching upstream.
+- **Dismiss grammar.** The app menu popover: outside-click + Escape. `#api-dialog`: its own ×
+  button or Escape only (native `<dialog>` already gives the latter for free).
+- **Destructive actions cue on interaction, not at rest.** The app menu's clear-history item
+  turns `--risk-high` on hover/focus instead of wearing red permanently. Where the cost is
+  countable, show the count rather than adding a confirm step.
 - **CSS comments carry WHY** — the rejected alternative, the measured constraint, the cross-file
   invariant. Restating the declaration underneath is the cut.
 

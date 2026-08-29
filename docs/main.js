@@ -2,26 +2,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { mount } from './runtime/index.js';
 import { meshToSTL } from './cad/stl-export.js';
 import { API_REFERENCE } from './cad/kernel.js';
 
-const DEFAULT_SCRIPT = `// Describe a part in chat, or write CSG here and hit Run (⌘⏎).
+const DEFAULT_SCRIPT = `// Write CSG here and hit Run (⌘⏎).
 // cube({size,center}) · cylinder({height,radius,radiusTop,segments,center}) · sphere({radius,segments})
 // union/subtract/intersect(...) · translate/rotate/scale/mirror(shape, v)
 
 return cube({ size: [30, 20, 10], center: true });
 `;
-
-const VIEW_PRESETS = {
-  iso: [1, 0.8, 1],
-  front: [0, 0, 1],
-  back: [0, 0, -1],
-  left: [-1, 0, 0],
-  right: [1, 0, 0],
-  top: [0, 1, 1e-6],
-  bottom: [0, -1, 1e-6],
-};
 
 // ---------- DOM refs ----------
 const canvas = document.getElementById('gl');
@@ -166,22 +155,6 @@ function applyGeometry(geometry) {
   resetBtn.disabled = false;
   requestRender();
   return { size, box };
-}
-
-function captureView(preset = 'iso') {
-  if (!mesh) throw new Error('No shape to view yet — run a script first.');
-  const dir = VIEW_PRESETS[preset] || VIEW_PRESETS.iso;
-  const v = new THREE.Vector3(...dir).normalize();
-  camera.position.copy(v).multiplyScalar(Math.max(lastRadius * 2.6, lastRadius + 0.05));
-  camera.near = Math.max(lastRadius / 100, 1e-4);
-  camera.far = Math.max(lastRadius * 50, 10);
-  camera.updateProjectionMatrix();
-  controls.target.set(0, 0, 0);
-  controls.update();
-  renderer.render(scene, camera); // this render is for the returned PNG, not the tick loop
-  const dataUrl = renderer.domElement.toDataURL('image/png');
-  requestRender(); // camera moved here outside the loop — make sure it repaints on screen too
-  return dataUrl.slice(dataUrl.indexOf(',') + 1);
 }
 
 wireframeBtn.addEventListener('click', () => {
@@ -341,8 +314,8 @@ window.addEventListener('drop', e => {
 // worker.js's run handler — see its catch there) drops the persistent
 // imported-reference state worker.js holds. cadWorker.onRestart (wired
 // below, once state exists) is the recovery path: it flips referenceInfo to
-// 'failed' so getSystemPrompt() and the report panel stop claiming
-// imported() still works, instead of the agent finding out only when the
+// 'failed' so get_render_report and the report panel stop claiming
+// imported() still works, instead of an agent finding out only when the
 // next imported() call throws.
 class CadWorker {
   constructor() { this.pending = new Map(); this.reqId = 0; this._spawn(); }
@@ -620,204 +593,118 @@ exportBtn.addEventListener('click', () => {
 });
 
 // ---------- WebMCP tool surface ----------
-const SYSTEM_PROMPT_BASE = `You are the authoring assistant embedded in stl-studio, a browser CSG tool for
-3D-printable parts. You write and iterate on a small JS CSG script via write_script; the page
-renders it with manifold-3d, a boolean-CSG kernel that guarantees watertight output when it
-succeeds. A status other than "NoError" means the geometry is NOT safe to print — treat that as a
-bug to fix yourself, not a cosmetic warning to mention and move past.
-
-Style — this is a working tool, not a conversation. The human is watching the viewport update
-live; you're narrating decisions and flagging problems, not writing them a report.
-- 1-3 short sentences by default. A finished part gets a status line, not a paragraph: "Plate with
-  4 corner holes — manifold, 412 tri, 40×40×4mm." Numbers over adjectives.
-- Don't re-explain what the tool can/can't do (primitives, no scanned-mesh support, etc.) more than
-  once per conversation — you already said it; the human remembers.
-- Asked a factual question ("what's loaded", "what are the dims") → answer it in one line and stop.
-  Don't pad with unrequested aesthetic description or caveats that don't change what happens next.
-- One crisp question when you genuinely need a decision from the human — never a paragraph of
-  setup before it.
-- Long explanation only when explicitly asked ("why", "explain", "walk me through it").
-
-${API_REFERENCE}
-
-Workflow:
-1. write_script with your best attempt. Read the report it returns (manifold?, triangle count, bbox).
-2. If it errored or came back non-manifold, fix the script and try again yourself before replying.
-3. Before telling the human a shape is done, call capture_view (try 'iso', and 'front'/'top' when
-   alignment matters) and actually look at the render — geometry can be manifold and still be
-   wrong (a hole in the wrong spot, wrong proportions, a part mirrored).
-4. Only call export_stl once the shape looks right and is manifold.
-
-State whatever unit you're treating the numbers as (usually mm) so the human isn't left guessing.`;
-
-function getSystemPrompt() {
-  const lines = [SYSTEM_PROMPT_BASE, '', 'Current page state:'];
-  if (state.busy) lines.push('- A script is currently running.');
-
-  if (state.mode === 'reference' && state.referenceInfo) {
-    lines.push(`- Viewport shows an IMPORTED file, not something you authored: ${formatReferenceLine(state.referenceInfo)}`);
-    if (state.referenceInfo.importStatus === 'ok') {
-      lines.push('- It imported as a valid manifold — call it with imported() in a script to compose it (union/subtract/intersect/transform) with primitives.');
-    } else if (state.referenceInfo.importStatus === 'failed') {
-      lines.push(`- It did NOT import as a usable shape (${state.referenceInfo.importError}) — view-only. Common for scanned/sculpted meshes. Describe what capture_view shows you; don't claim you can use it in a script.`);
-    }
-  } else if (state.lastError) {
-    lines.push(`- Last run FAILED: ${state.lastError}`);
-  } else if (state.lastReport) {
-    lines.push(`- Current shape: ${formatReportLine(state.lastReport)}`);
-  } else {
-    lines.push('- No shape rendered yet.');
+// Exposes the app's operations to any WebMCP-aware agent sharing this tab, via
+// document.modelContext.registerTool() — an in-progress W3C Web Machine Learning CG
+// proposal (github.com/webmachinelearning/webmcp). This replaced stl-studio's embedded
+// first-party chat: no agent ships with the page anymore, so every call below comes from
+// whatever browser-integrated agent the visitor brought. As of 2026 that's narrow — the
+// ChatGPT desktop app's built-in browser supports it, but its own Chrome extension does
+// not, nor does stock Chrome without an experimental flag/origin trial.
+//
+// capture_view from the old chat tool set is deliberately NOT ported: execute() may
+// return any JSON-serializable value, but the spec has no defined shape for image/binary
+// tool output yet ("multimodal input/output" is still open — see the explainer's Future
+// Explorations section) — there is currently no way to hand an agent the PNG this tool
+// used to return for visual verification. Re-add once a shape for that exists.
+function registerWebMcpTools() {
+  if (!('modelContext' in document)) return; // no WebMCP support in this browser — silent no-op, per the spec's own feature-detect guidance
+  const tools = [
+    {
+      name: 'write_script',
+      title: 'Write script',
+      description: 'Replace the current CSG script and render it. Returns the render report (manifold check, triangle count, bbox) or a caught error to fix.',
+      inputSchema: {
+        type: 'object',
+        properties: { code: { type: 'string', description: 'JS function body using the CSG API; must end with `return <shape>`.' } },
+        required: ['code'],
+      },
+      annotations: { readOnlyHint: false },
+      async execute({ code }) {
+        editorEl.value = code;
+        const result = await runScript(code);
+        if (!result.ok) return { error: result.error };
+        return { summary: formatReportLine(result.report), ...result.report };
+      },
+    },
+    {
+      name: 'get_render_report',
+      title: 'Get render report',
+      description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume. If an imported file is open instead of an authored shape, returns its filename/triangle count/dimensions and whether it imported as a usable manifold (usable via imported() in scripts) or view-only (common for scanned/sculpted meshes) — this is the only way to learn that; raw geometry isn\'t readable, only what this reports. Also reports an imported file that exists but isn\'t currently on screen.',
+      annotations: { readOnlyHint: true },
+      async execute() {
+        const result = {};
+        if (state.mode === 'reference' && state.referenceInfo) {
+          result.viewing = { mode: 'reference', ...state.referenceInfo };
+        } else if (state.lastError) {
+          return { error: state.lastError };
+        } else if (state.lastReport) {
+          result.viewing = { mode: 'authored', ...state.lastReport };
+        } else {
+          result.viewing = { mode: 'none' };
+        }
+        if (state.referenceInfo && state.mode !== 'reference') {
+          result.alsoAvailable = { mode: 'reference', ...state.referenceInfo };
+        }
+        result.summary = result.viewing.mode === 'reference' ? formatReferenceLine(state.referenceInfo)
+          : result.viewing.mode === 'authored' ? formatReportLine(state.lastReport) : 'No shape yet.';
+        return result;
+      },
+    },
+    {
+      name: 'read_script',
+      title: 'Read current script',
+      description: 'Return the exact script currently loaded in the editor, in case a human edited it or the agent needs to patch it incrementally instead of rewriting from memory.',
+      annotations: { readOnlyHint: true },
+      async execute() { return { summary: `${editorEl.value.length} chars`, code: editorEl.value }; },
+    },
+    {
+      name: 'export_stl',
+      title: 'Export STL',
+      description: 'Serialize the current authored shape to binary STL and download it. Only works for the authored shape, not an imported file opened for comparison.',
+      inputSchema: { type: 'object', properties: { filename: { type: 'string', description: 'Base filename; .stl is added if missing.' } } },
+      annotations: { readOnlyHint: false },
+      async execute({ filename } = {}) {
+        if (state.mode !== 'authored' || !state.lastMesh) return { error: 'No authored shape to export yet — run a script first.' };
+        if (!state.lastReport?.manifold) return { error: `Not manifold (${state.lastReport?.status ?? 'unknown'}) — fix the script before exporting.` };
+        if (state.lastReport.empty) return { error: 'Nothing to export — result has 0 triangles.' };
+        const r = doExport(filename);
+        return { summary: `Exported ${r.filename} (${r.bytes.toLocaleString()} bytes)` };
+      },
+    },
+    {
+      name: 'reset_script',
+      title: 'Reset script',
+      description: 'Clear the editor back to the starter template, remove the current shape, and drop the imported file (imported() stops working). Wipes in-progress work.',
+      annotations: { readOnlyHint: false },
+      async execute() {
+        editorEl.value = DEFAULT_SCRIPT;
+        state.code = DEFAULT_SCRIPT;
+        clearModel();
+        state.lastMesh = null; state.lastReport = null; state.lastError = null;
+        state.mode = 'authored'; state.referenceInfo = null;
+        emptyEl.textContent = DEFAULT_EMPTY_HINT;
+        emptyEl.hidden = false; resetBtn.disabled = true; exportBtn.disabled = true;
+        reportEl.hidden = true; setStatus('', '');
+        try { await cadWorker.clearImport(); } catch { /* best-effort */ }
+        return { summary: 'Script reset.' };
+      },
+    },
+  ];
+  for (const tool of tools) {
+    document.modelContext.registerTool(tool).catch(err => {
+      console.warn(`WebMCP: couldn't register tool "${tool.name}":`, err);
+    });
   }
-
-  if (state.referenceInfo && state.mode !== 'reference') {
-    const usable = state.referenceInfo.importStatus === 'ok';
-    lines.push(`- Also available${usable ? ' via imported()' : ' (view-only, not usable in scripts)'}: ${formatReferenceLine(state.referenceInfo)}`);
-  }
-
-  return lines.join('\n');
 }
-function getDividerContext() {
-  if (state.mode === 'reference' && state.referenceInfo) return [formatReferenceLine(state.referenceInfo)];
-  return state.lastReport ? [formatReportLine(state.lastReport)] : [];
-}
+registerWebMcpTools();
 
-const TOOL_DEFS = [
-  {
-    name: 'write_script',
-    title: 'Write script',
-    description: 'Replace the current CSG script and render it. Returns the render report (manifold check, triangle count, bbox) or a caught error to fix.',
-    readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false,
-    schema: {
-      type: 'object',
-      properties: { code: { type: 'string', description: 'JS function body using the CSG API; must end with `return <shape>`.' } },
-      required: ['code'],
-    },
-    exec: async ({ code }) => {
-      editorEl.value = code;
-      const result = await runScript(code);
-      if (!result.ok) return { error: result.error };
-      return { summary: formatReportLine(result.report), displayed: true, ...result.report };
-    },
-  },
-  {
-    name: 'get_render_report',
-    title: 'Get render report',
-    description: 'Current shape stats without re-rendering: manifold check, triangle/vertex count, bounding box, volume. If an imported file is open instead of an authored shape, returns its filename/triangle count/dimensions and whether it imported as a usable manifold (usable via imported() in scripts) or view-only (common for scanned/sculpted meshes) — this is your only way to learn that; you cannot read its raw geometry, only what this and capture_view show you. Also reports an imported file that exists but isn\'t currently on screen.',
-    readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
-    schema: { type: 'object', properties: {} },
-    exec: async () => {
-      const result = {};
-      if (state.mode === 'reference' && state.referenceInfo) {
-        result.viewing = { mode: 'reference', ...state.referenceInfo };
-      } else if (state.lastError) {
-        return { error: state.lastError };
-      } else if (state.lastReport) {
-        result.viewing = { mode: 'authored', ...state.lastReport };
-      } else {
-        result.viewing = { mode: 'none' };
-      }
-      if (state.referenceInfo && state.mode !== 'reference') {
-        result.alsoAvailable = { mode: 'reference', ...state.referenceInfo };
-      }
-      result.summary = result.viewing.mode === 'reference' ? formatReferenceLine(state.referenceInfo)
-        : result.viewing.mode === 'authored' ? formatReportLine(state.lastReport) : 'No shape yet.';
-      return result;
-    },
-  },
-  {
-    name: 'read_script',
-    title: 'Read current script',
-    description: 'Return the exact script currently loaded in the editor, in case a human edited it or you need to patch it incrementally instead of rewriting from memory.',
-    readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
-    schema: { type: 'object', properties: {} },
-    exec: async () => ({ summary: `${editorEl.value.length} chars`, code: editorEl.value }),
-  },
-  {
-    name: 'capture_view',
-    title: 'Capture viewport image',
-    description: 'Render the current shape (or imported file, if one is open) from a named camera angle and return it as an image, so you can visually check the result instead of reasoning about numbers alone.',
-    readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false,
-    schema: {
-      type: 'object',
-      properties: { preset: { type: 'string', enum: Object.keys(VIEW_PRESETS), description: 'Camera angle. Default iso.' } },
-    },
-    exec: async ({ preset = 'iso' } = {}) => {
-      let base64;
-      try { base64 = captureView(preset); }
-      catch (err) { return { error: err.message }; }
-      const dims = state.mode === 'reference' && state.referenceInfo ? formatReferenceLine(state.referenceInfo)
-        : state.lastReport ? formatReportLine(state.lastReport) : '';
-      return [
-        { type: 'text', text: `${preset} view${dims ? ' — ' + dims : ''}` },
-        { type: 'image', data: base64, mimeType: 'image/png' },
-      ];
-    },
-  },
-  {
-    name: 'export_stl',
-    title: 'Export STL',
-    // Starts with the full first sentence containing no earlier '.' (e.g.
-    // ".stl") — the vendored tools.js truncates a tool's displayed
-    // description at the first literal '.' it finds, which would otherwise
-    // cut this off mid-word.
-    description: 'Serialize the current authored shape to binary STL and download it. Only works for the authored shape, not an imported file opened for comparison.',
-    readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false,
-    schema: { type: 'object', properties: { filename: { type: 'string', description: 'Base filename; .stl is added if missing.' } } },
-    exec: async ({ filename } = {}) => {
-      if (state.mode !== 'authored' || !state.lastMesh) return { error: 'No authored shape to export yet — run a script first.' };
-      if (!state.lastReport?.manifold) return { error: `Not manifold (${state.lastReport?.status ?? 'unknown'}) — fix the script before exporting.` };
-      if (state.lastReport.empty) return { error: 'Nothing to export — result has 0 triangles.' };
-      const r = doExport(filename);
-      return { summary: `Exported ${r.filename} (${r.bytes.toLocaleString()} bytes)`, displayed: true };
-    },
-  },
-  {
-    name: 'reset_script',
-    title: 'Reset script',
-    description: 'Clear the editor back to the starter template, remove the current shape, and drop the imported file (imported() stops working). Wipes in-progress work.',
-    readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false,
-    schema: { type: 'object', properties: {} },
-    exec: async () => {
-      editorEl.value = DEFAULT_SCRIPT;
-      state.code = DEFAULT_SCRIPT;
-      clearModel();
-      state.lastMesh = null; state.lastReport = null; state.lastError = null;
-      state.mode = 'authored'; state.referenceInfo = null;
-      emptyEl.textContent = DEFAULT_EMPTY_HINT;
-      emptyEl.hidden = false; resetBtn.disabled = true; exportBtn.disabled = true;
-      reportEl.hidden = true; setStatus('', '');
-      try { await cadWorker.clearImport(); } catch { /* best-effort */ }
-      return { summary: 'Script reset.', displayed: true };
-    },
-  },
-];
-
-const QUICK_ACTIONS = [
-  'A plate with 4 corner mounting holes',
-  'A simple enclosure box with a lid lip',
-  'A parametric L-bracket with 3 holes',
-];
-
-mount({
-  tools: TOOL_DEFS,
-  getSystemPrompt,
-  getDividerContext,
-  quickActions: QUICK_ACTIONS,
-  // SDK isolation mode (requires a termd build with the settingSources knob — see
-  // ../termd/server/turns.mjs): no ~/.claude/settings.json (hooks, output style), no
-  // CLAUDE.md, no project/local settings. This assistant should only ever know what
-  // getSystemPrompt() + API_REFERENCE tell it, never the operator's own Claude config.
-  settingSources: [],
-});
-
-// ---------- Floating panel toggles ----------
-// Editor and chat are position:fixed overlays (cad.css) — toggling them
-// only slides a transform, it never resizes the canvas underneath. Each
-// button's icon names which side it controls (fixed); aria-expanded marks
-// whether that panel is currently open (cad.css keys off the attribute, not
-// a class). One control per action: the panels used to also carry their own
-// '✕' close button, redundant with the edge toggle that already opens/
-// closes the same panel — removed, so toggleBtn is the only way in or out.
+// ---------- Floating panel toggle ----------
+// The editor pane is a position:fixed overlay (cad.css) — toggling it only
+// slides a transform, it never resizes the canvas underneath. aria-expanded
+// marks whether the panel is currently open (cad.css keys off the
+// attribute, not a class); the panel used to also carry its own '✕' close
+// button, redundant with the edge toggle that already opens/closes it —
+// removed, so toggleBtn is the only way in or out.
 function wirePanelToggle(toggleBtn, panelEl, storageKey) {
   const setOpen = (open) => {
     panelEl.dataset.open = String(open);
@@ -833,16 +720,10 @@ wirePanelToggle(
   document.getElementById('panel-toggle-left'),
   document.getElementById('editor-pane'), 'stl-studio-editor-open',
 );
-wirePanelToggle(
-  document.getElementById('panel-toggle-right'),
-  document.getElementById('chat-panel-el'), 'stl-studio-chat-open',
-);
 
 // ---------- App menu (the wordmark) ----------
 // Disclosure, not role="menu" — see index.html for why. Dismiss grammar is
-// the menu half of CLAUDE.md § UI/UX principles (outside-click + Escape), wired here
-// rather than inherited: runtime/index.js has the same handler, but it's
-// hardcoded to the settings popover's own two element ids.
+// the menu half of CLAUDE.md § UI/UX principles (outside-click + Escape).
 const appMenuBtn = document.getElementById('app-menu-btn');
 const appMenuEl = document.getElementById('app-menu');
 const historyCountEl = document.getElementById('menu-history-count');
@@ -879,10 +760,11 @@ clearHistoryBtn.addEventListener('click', () => {
   syncHistoryMenuItem();
 });
 
-// API_REFERENCE is the exact text the assistant receives in its system
-// prompt (getSystemPrompt above); the human writing in the same editor had
-// no way to read it. textContent, not innerHTML — it's a plain string shown
-// as-is, so there's no markup to sanitize and no markdown to parse.
+// API_REFERENCE is kernel.js's CSG DSL reference; humans writing scripts by
+// hand had no other way to read it, and each WebMCP tool's own description
+// only documents that tool, not the whole DSL. textContent, not innerHTML —
+// it's a plain string shown as-is, so there's no markup to sanitize and no
+// markdown to parse.
 const apiDialog = document.getElementById('api-dialog');
 document.getElementById('api-dialog-body').textContent = API_REFERENCE.trim();
 document.getElementById('menu-api').addEventListener('click', () => {
@@ -890,33 +772,3 @@ document.getElementById('menu-api').addEventListener('click', () => {
   apiDialog.showModal();
 });
 document.getElementById('api-dialog-close').addEventListener('click', () => apiDialog.close());
-
-// ---------- Chat settle announcer ----------
-// #chat-messages used to carry aria-live="polite" itself (index.html) —
-// vendored runtime/loop.js streams the assistant's reply into that div
-// token-by-token as markdown renders, so a live region ON it announced
-// every intermediate delta: a screen reader user got a word-by-word
-// narration instead of a normal reply. Announce only that the exchange
-// settled, via a separate, visually-hidden status region driven by a
-// debounced MutationObserver — no message text mirrored, just the signal.
-const chatMessagesEl = document.getElementById('chat-messages');
-const chatLiveEl = document.createElement('div');
-chatLiveEl.className = 'sr-only';
-chatLiveEl.setAttribute('role', 'status');
-chatLiveEl.setAttribute('aria-live', 'polite');
-document.body.appendChild(chatLiveEl);
-let chatSettleTimer = null;
-new MutationObserver(() => {
-  clearTimeout(chatSettleTimer);
-  chatSettleTimer = setTimeout(() => {
-    // Bare 800ms DOM quiescence isn't "assistant replied" on its own: it's
-    // also what Clear leaves behind (0 children), and what a >800ms
-    // thinking pause looks like mid-turn (the spinner is still up, appended
-    // as a real child of this same element — see runtime/chat.js's
-    // showSpinner). Only announce once a message has actually landed.
-    if (!chatMessagesEl.children.length) return;
-    if (chatMessagesEl.querySelector('.chat-spinner')) return;
-    const last = chatMessagesEl.lastElementChild;
-    chatLiveEl.textContent = last.classList.contains('msg-error') ? 'Something went wrong.' : 'Assistant replied.';
-  }, 800);
-}).observe(chatMessagesEl, { childList: true, subtree: true, characterData: true });
