@@ -5,11 +5,20 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { meshToSTL } from './cad/stl-export.js';
 import { API_REFERENCE } from './cad/kernel.js';
 
-const DEFAULT_SCRIPT = `// Write CSG here and hit Run (⌘⏎).
+// Renders on load (see the auto-run call near the bottom of this file) so the
+// viewport never opens empty — a plate with 4 mounting holes exercises more of
+// the DSL (translate, a boolean, a loop) than a bare primitive would.
+const DEFAULT_SCRIPT = `// A plate with 4 mounting holes — edit this and hit Run (⌘⏎), or write your own.
 // cube({size,center}) · cylinder({height,radius,radiusTop,segments,center}) · sphere({radius,segments})
 // union/subtract/intersect(...) · translate/rotate/scale/mirror(shape, v)
 
-return cube({ size: [30, 20, 10], center: true });
+const plate = cube({ size: [60, 40, 6], center: true });
+const hole = (x, y) => translate(cylinder({ height: 10, radius: 3, segments: 32, center: true }), [x, y, 0]);
+let bracket = plate;
+for (const [x, y] of [[-25, -15], [25, -15], [-25, 15], [25, 15]]) {
+  bracket = subtract(bracket, hole(x, y));
+}
+return bracket;
 `;
 
 // ---------- DOM refs ----------
@@ -697,6 +706,11 @@ function registerWebMcpTools() {
   }
 }
 registerWebMcpTools();
+
+// Not recorded to history: this fires on every load/reload, and history is
+// for runs a human (or agent) actually chose, not the starter template
+// re-appearing each time.
+runScript(DEFAULT_SCRIPT, { record: false });
 
 // ---------- Floating panel toggle ----------
 // The editor pane is a position:fixed overlay (cad.css) — toggling it only
