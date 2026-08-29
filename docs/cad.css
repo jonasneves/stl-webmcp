@@ -228,6 +228,7 @@ main { grid-area: work; min-height: 0; position: relative; overflow: hidden; }
  * veil + inset dashed border, same glass recipe as everywhere else.
  * pointer-events:none throughout so it never steals the drop event it
  * exists to announce; main.js only ever toggles the [hidden] attribute. */
+.drop-indicator[hidden] { display: none; }
 .drop-indicator {
   position: fixed;
   inset: 0;
