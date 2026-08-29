@@ -7,7 +7,7 @@ Non-obvious design decisions and gotchas. Read the header comments in `main.js`,
 
 - `app.css` (shared design tokens only — colors, spacing, radius, duration/ease, fonts) is ported
   UNMODIFIED from `../webmcp` — never edit it here; changes belong upstream. `cad.css`, `cad/`,
-  `main.js`, `index.html` are stl-studio's own.
+  `main.js`, `index.html` are stl-webmcp's own.
 - `cad.css` loads last and owns the page's actual grid/layout outright (including `body`'s
   `display: grid`) — app.css's own `header`/`tools-panel`/`settings` component selectors don't
   match anything in this app's DOM; only its `:root` tokens are consumed here. All layout/style

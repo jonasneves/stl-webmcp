@@ -1,4 +1,4 @@
-/* stl-studio layout: the canvas always fills every pixel of the window —
+/* stl-webmcp layout: the canvas always fills every pixel of the window —
  * there is no header bar at all. Every control is a small glass pill,
  * fixed-positioned directly over the canvas in a single HUD cluster pinned
  * to the top-left corner (.hud-left); the script editor is a floating

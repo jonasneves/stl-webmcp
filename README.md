@@ -1,4 +1,4 @@
-# stl-studio
+# stl-webmcp
 
 Browser-native STL viewer and CSG authoring studio. Write a parametric CSG script by
 hand, or let a WebMCP-aware agent drive it directly; watch it render live, export a
@@ -44,5 +44,5 @@ entry point. This is that entry point.
 Three.js + manifold-3d, both loaded as ESM from jsDelivr (import map for three.js;
 manifold-3d dynamically imported inside the worker). No npm install, no bundler.
 `app.css` (shared design tokens — colors, spacing, radius, fonts) is ported unmodified
-from [`webmcp`](../webmcp) — `cad.css`/`cad/`/`main.js`/`index.html` are stl-studio's
+from [`webmcp`](../webmcp) — `cad.css`/`cad/`/`main.js`/`index.html` are stl-webmcp's
 own.

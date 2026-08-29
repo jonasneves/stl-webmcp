@@ -476,7 +476,7 @@ function applyManifoldMesh(meshData) {
   applyGeometry(geometry);
 }
 
-const HISTORY_KEY = 'stl-studio-history';
+const HISTORY_KEY = 'stl-webmcp-history';
 
 // Shared by pushHistory and the on-load restore below, so the dropdown is
 // always built the same way regardless of where state.history came from.
@@ -604,7 +604,7 @@ exportBtn.addEventListener('click', () => {
 // ---------- WebMCP tool surface ----------
 // Exposes the app's operations to any WebMCP-aware agent sharing this tab, via
 // document.modelContext.registerTool() — an in-progress W3C Web Machine Learning CG
-// proposal (github.com/webmachinelearning/webmcp). This replaced stl-studio's embedded
+// proposal (github.com/webmachinelearning/webmcp). This replaced stl-webmcp's embedded
 // first-party chat: no agent ships with the page anymore, so every call below comes from
 // whatever browser-integrated agent the visitor brought. As of 2026 that's narrow — the
 // ChatGPT desktop app's built-in browser supports it, but its own Chrome extension does
@@ -732,7 +732,7 @@ function wirePanelToggle(toggleBtn, panelEl, storageKey) {
 }
 wirePanelToggle(
   document.getElementById('panel-toggle-left'),
-  document.getElementById('editor-pane'), 'stl-studio-editor-open',
+  document.getElementById('editor-pane'), 'stl-webmcp-editor-open',
 );
 
 // ---------- App menu (the wordmark) ----------
