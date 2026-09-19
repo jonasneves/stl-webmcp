@@ -737,7 +737,7 @@ wirePanelToggle(
 
 // ---------- App menu (the wordmark) ----------
 // Disclosure, not role="menu" — see index.html for why. Dismiss grammar is
-// the menu half of CLAUDE.md § UI/UX principles (outside-click + Escape).
+// the menu half of AGENTS.md § UI/UX principles (outside-click + Escape).
 const appMenuBtn = document.getElementById('app-menu-btn');
 const appMenuEl = document.getElementById('app-menu');
 const historyCountEl = document.getElementById('menu-history-count');

@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Non-obvious design decisions and gotchas. Read the header comments in `main.js`, `cad/kernel.js`,
 `cad/worker.js`, and `cad.css` for the full reasoning — this is the compressed index.

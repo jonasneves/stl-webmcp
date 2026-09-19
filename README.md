@@ -31,7 +31,7 @@ static site (GitHub Pages, Cloudflare Pages, etc.).
   always renders at full size, and the panel toggles independently (edge button, state
   persisted per-browser).
 
-See [`CLAUDE.md`](./CLAUDE.md) for the non-obvious design decisions and gotchas.
+See [`AGENTS.md`](./AGENTS.md) for the non-obvious design decisions and gotchas.
 
 ## Why this exists
 
