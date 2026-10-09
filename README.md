@@ -31,6 +31,8 @@ static site (GitHub Pages, Cloudflare Pages, etc.).
   always renders at full size, and the panel toggles independently (edge button, state
   persisted per-browser).
 
+**From Claude, Cursor or VS Code.** The page loads [`relay.neves.cloud/webmcp.js`](https://github.com/jonasneves/mcp-relay): a visitor who presses **Use in Claude** gets one-click Add buttons, and their AI app can then call these tools while the tab is open. In a browser without `document.modelContext`, that script provides one so the tools register anyway.
+
 See [`AGENTS.md`](./AGENTS.md) for the non-obvious design decisions and gotchas.
 
 ## Why this exists
