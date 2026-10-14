@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- A shaded solid cube, the page's own favicon glyph (an ice cube) drawn flat: the app scripts and edits solid meshes. -->
+  <rect x="1" y="1" width="126" height="126" rx="28" fill="#20252d"/>
+  <path fill="#c4ecf8" d="M64 20 L102 42 L64 64 L26 42 Z"/>
+  <path fill="#5fb8d9" d="M26 42 L64 64 L64 108 L26 86 Z"/>
+  <path fill="#2c7aa0" d="M64 64 L102 42 L102 86 L64 108 Z"/>
+</svg>
