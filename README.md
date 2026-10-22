@@ -31,7 +31,7 @@ static site (GitHub Pages, Cloudflare Pages, etc.).
   always renders at full size, and the panel toggles independently (edge button, state
   persisted per-browser).
 
-**From Claude, Cursor or VS Code.** The page loads `relay.kandue.app/webmcp.js`, from an MCP relay the author runs on Cloudflare. A visitor who presses **Use in Claude** gets one-click Add buttons with a private address for their tab; their AI app's tool calls then reach this page through the relay, and the results come back the same way. The relay passes them through and does not store them. Nothing connects until that button is pressed. In a browser without `document.modelContext`, the script provides one so the tools register anyway.
+**From Claude, Cursor or VS Code.** The page loads `relay.site-mcp.com/webmcp.js`, from an MCP relay the author runs on Cloudflare. A visitor who presses **Use in Claude** gets one-click Add buttons with a private address for their tab; their AI app's tool calls then reach this page through the relay, and the results come back the same way. The relay passes them through and does not store them. Nothing connects until that button is pressed. In a browser without `document.modelContext`, the script provides one so the tools register anyway.
 
 See [`AGENTS.md`](./AGENTS.md) for the non-obvious design decisions and gotchas.
 
