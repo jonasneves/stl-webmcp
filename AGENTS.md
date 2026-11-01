@@ -84,18 +84,14 @@ index; the `cad.css` comment at that spot is the reasoning.
   adding it to both blocks.
 - **Contrast is measured, not chosen.** `app.css` states its ratios inline (`--text-source` 6.34:1,
   `--text-caveat` 6.23:1); new color over the frozen surface states its own the same way.
-- **Color is never the only carrier.** `.vp-report` / `.editor-status` pair hue with a ✓/✗ glyph.
-  Where a second channel isn't reachable, stay quiet and say why in the comment; never fake it.
-- **Floors are themed once; exemptions name their reason.** Focus is `2px solid var(--accent)` on
-  every control, restyled per control but never removed. Touch targets: SC 2.5.8's 24px is a
-  mouse-era number, bumped to 40px under `@media (pointer: coarse)` only where the input is one.
+- **Floors are themed once; exemptions name their reason.** Focus is `2px solid var(--accent)`.
+  Touch targets: SC 2.5.8's 24px is a mouse-era number, bumped to 40px under
+  `@media (pointer: coarse)` only where the input is one.
 - **Dismiss grammar.** The app menu popover: outside-click + Escape. `#api-dialog`: its own ×
   button or Escape only (native `<dialog>` already gives the latter for free).
 - **Destructive actions cue on interaction, not at rest.** The app menu's clear-history item
   turns `--risk-high` on hover/focus instead of wearing red permanently. Where the cost is
   countable, show the count rather than adding a confirm step.
-- **CSS comments carry WHY** — the rejected alternative, the measured constraint, the cross-file
-  invariant. Restating the declaration underneath is the cut.
 
 ## Build
 
